@@ -6,7 +6,7 @@
 #    By: bazaluga <bazaluga@student.42.fr>          +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2025/05/27 20:45:45 by bazaluga          #+#    #+#              #
-#    Updated: 2025/05/27 21:18:58 by bazaluga         ###   ########.fr        #
+#    Updated: 2025/07/02 19:18:52 by bazaluga         ###   ########.fr        #
 #                                                                              #
 #******************************************************************************#
 
@@ -29,7 +29,7 @@ all:		$(NAME)
 
 $(NAME):	$(OBJ)
 			@$(CC) $(OBJ) -o $(NAME)
-			@printf $(GREEN)"🚀 $(NAME) was successfully built.\n\n🏃‍♂️Run ./ircserv <port> <password> to get started.\n"$(RESET)
+			@printf $(GREEN)"🚀 $(NAME) was successfully built.\n\n🏃‍Run ./ircserv <port> <password> to get started.\n"$(RESET)
 
 $(OBJDIR):
 			mkdir -p $(OBJDIR)

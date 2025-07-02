@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <stdio.h>
 
 #define PORT 6667
 #define MAX_CLIENTS 10
