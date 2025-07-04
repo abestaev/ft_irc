@@ -3,16 +3,30 @@
 #include <cstdlib>
 #include <cstdio>
 
+void error(char *msg)
+{
+	perror(msg);
+	exit(EXIT_FAILURE);
+}
+
 int	main(int ac, char **av)
 {
-	int	sockfd, newsockfd, portno, clientfds[MAX_CLIENTS], activity;
+	int	sockfd;
+	int	newsockfd;
+	int	portno;
+	int	clientfds[MAX_CLIENTS];
+	int	ready;
 	Client *clients[MAX_CLIENTS];
 	socklen_t clilen;
 	int opt = 1;
 	char buffer[BUFFER_SIZE];
 	struct sockaddr_in serv_addr, cli_addr;
 	int n;
+	
+	struct pollfd *pfds;
+	int nfds;
 
+	// int	set_size = 0;
 	// fd_set fdset;
 
 	for (int i = 0; i < MAX_CLIENTS; i++)
@@ -20,10 +34,7 @@ int	main(int ac, char **av)
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0)
-	{
-		perror("Error opening socket");
-		return 1;
-	}
+		error("socket error");
 
 	// override "TIME_WAIT state" behavior / allows port to be reused immediatly
     setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt));
@@ -36,48 +47,21 @@ int	main(int ac, char **av)
 	serv_addr.sin_port = htons(portno);
 
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
-	{
-		perror("Error on binding");
-		return 1;
-	}
+		error("bind error");
 
 	listen(sockfd, 5);
 
 	clilen = sizeof(cli_addr);
+	// FD_ZERO(&fdset);
+	// FD_SET(sockfd, &fdset);
 	while (true)
 	{
-		// FD_ZERO(&fdset);
-		// FD_SET(sockfd, &fdset);
-
-		// - --- - - -- - --- - - doesnt work -- -- ------- - -- --
-		// newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-		// if (newsockfd < 0)
-		// {
-		// 	perror("Error on accept");
-		// 	return 1;
-		// }
-		// for (int i = 0; i < MAX_CLIENTS; i++)
-		// {
-		// 	if (clientfds[i] == -1)
-		// 		clientfds[i] = newsockfd;
-		// }
-		// for (int i = 0; i < MAX_CLIENTS; i++)
-		// {
-		// 	if (clientfds[i] != -1)
-		// 	{
-		// 		n = read(clientfds[i], buffer, BUFFER_SIZE - 1);
-		// 		if (n < 0) {
-		// 			perror("Error reading from socket");
-		// 			return 1;
-		// 		}
-		// 		std::cout << "received message: " << buffer << std::endl;
-		// 		n = write(newsockfd, "message received\n", 18);
-		// 		if (n < 0) {
-		// 			perror("Error on writing to socket");
-		// 			return 1;
-		// 		}
-		// 	}
-		// }
+		
+		
+		ready = poll(pfds, nfds, -1);
+		if (ready < 0)
+			error("poll error");
+		
 	}
 
 	// close(newsockfd);
