@@ -9,6 +9,7 @@
 #include <poll.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
 #define DEFAULT_PORT 6667
 #define MAX_CLIENTS 10
@@ -19,6 +20,7 @@ class Client
 private:
 	int fd;
 	std::string addr;
+	
 public:
 	Client();
 	~Client();

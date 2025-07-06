@@ -50,28 +50,82 @@ int	main(int ac, char **av)
 	listen(sockfd, 5);
 	
 	clilen = sizeof(cli_addr);
+
+	/*make socket non blocking
+	int flags = fcntl(sock_fd, F_GETFL, 0);
+	fcntl(sock_fd, F_SETFL, flags | O_NONBLOCK);
+	*/
+
 	while (true)
 	{	
 		ready = poll(pfds, nfds, -1);
 		if (ready < 0)
 			error("poll error");
 
-		/*non blocking socket
-			while (pfds[0].revents & POLLIN)
+		/*non blocking socket / + can accept multiple connections for each iteration
 		*/
+		while (pfds[0].revents & POLLIN)
+		{
+			newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
+			if (newsockfd < 0)
+			{
+				if (errno == EWOULDBLOCK || errno == EAGAIN)
+					break ;
+				perror("accept error");
+				break ;
+			}
+
+			if (nfds < MAX_CLIENTS)
+			{
+				pfds[nfds].fd = newsockfd;
+				pfds[nfds].events = POLLIN;
+				nfds++;
+				std::cout << "New connection accepted, fd = " << newsockfd << "!" << std::endl;
+			}
+			else
+			{
+				std::cout << "New connection refused. Server is full." << std::endl;
+				close(newsockfd);
+			}
+		}
+		/*blocking socket / + only accepts one connection per iteration
 		if (pfds[0].revents & POLLIN)
 		{
 			newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
 			if (newsockfd < 0)
 			{
-				/*non blocking socket
-					if (errno == EWOULDBLOCK || errno == EAGAIN)
-						break ;
-					perror("accept error");
-					break ;
-				*/
 				perror("accept error");
 				continue ;
+			}
+			if (nfds < MAX_CLIENTS)
+			{
+				
+				pfds[nfds].fd = newsockfd;
+				pfds[nfds].events = POLLIN;
+				nfds++;
+				std::cout << "New connection accepted, fd = " << newsockfd << "!" << std::endl;
+			}
+			else
+			{
+				std::cout << "New connection refused. Server is full." << std::endl;
+				close(newsockfd);
+			}
+		}
+		*/
+
+		for (int i = 1; i < nfds; i++)
+		{
+			if (pfds[i].revents & POLLIN)
+			{
+				char buf[BUFFER_SIZE];
+				int bytes = read(pfds[i].fd, buf, BUFFER_SIZE);
+				if (bytes <= 0)
+				{
+					//client disconnected
+				} else {
+					buffer[bytes] = '\0';
+					//message received: buf
+				}
 			}
 		}
 	}
