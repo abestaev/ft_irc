@@ -1,0 +1,118 @@
+socket
+int socket(int domain, int type, int protocol);
+domain AF_INET (ipv4)
+type SOCK_STREAM (TCP)
+protocol 0 ou IPPROTO_TCP
+
+
+
+close
+int close(int fd)
+pour close un socket, attention, aussi retirer dans le tableau de pollfd
+
+
+
+setsockopt
+int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
+socket()
+SOL_SOCKET
+SO_REUSEADRR
+int ?
+sizeof(int) ?
+
+ca sert principalement a vite relancer apres un crashi
+
+
+
+getsockname
+int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+ex:
+if (getsockname(server_fd, (struct sockaddr*)&addr, &addr_len) == -1)
+pas tres utile 
+
+
+
+getprotobyname
+stuct protoent *getprotobyname(const char *name)
+exemple:
+stuct protoent *proto = getprotobyname("tcp");
+socket(AD_INET, SOCK_STREAM, proto->p_proto);
+
+struct protoent {
+	char  *p_name;
+	char **p_aliases;
+	int    p_proto;
+}
+
+ne sert pas a grand chose car on peut simplement faire 
+socker(AF_INET, SOCK_STREAM, 0);
+
+
+
+gethostbyname
+struct hostent *gethostbyname(const char *name)
+permet de se connecter a un nom au lieu d une ip brute
+
+struct hostent {
+	char  *h_name;
+	char **h_aliases;
+	int    h_addrtype;
+	int    h_length;
+	char **h_addr_list;
+}
+
+
+
+getaddrinfo
+int getaddrinfo(const char *node, const char *service, 
+		const struct addrinfo *hints,
+		struct addrinfo **res);
+
+struct addrinfo {
+	int		ai_flags;
+	int		ai_family;
+	int		ai_socktype;
+	int		ai_protocol;
+	socklen_t	ai_addrlen;
+	struct sockaddr *ai_addr;
+	char 		*ai_canonname;
+	struct addrinfo *ai_next;
+
+}
+
+
+
+freeaddrinfo
+void freeaddrinfo(struct addrinfo *res);
+
+
+
+bind
+int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+associe un socket a une adresse ip et un port 
+
+
+connect
+listen
+accept
+htons
+htonl
+ntohs
+ntohl
+inet_addr
+inet_ntoa
+send
+recv
+signal
+sigaction
+lseek
+fstat
+fcntl
+poll
+epoll
+select
+kqueue
+
+./ircserv <port> <passwd>
+
+
