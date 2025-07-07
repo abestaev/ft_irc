@@ -122,6 +122,7 @@ int	main(int ac, char **av)
 				if (bytes <= 0)
 				{
 					//client disconnected
+					// remove client from list
 				} else {
 					buffer[bytes] = '\0';
 					//message received: buf
