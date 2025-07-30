@@ -30,6 +30,7 @@ Server::Server(int port, std::string pass): _port(port), _pass(pass)
 
 	//listen(sockfd, SOMAXCONN);
 }
+Server::~Server() {}
 
 void	Server::init()
 {
@@ -69,20 +70,69 @@ void Server::run()
 		
 		//new connections
 		accept_new_clients();
+
+		// MOVE TO FUNCTION vvv
+		char buf[BUFFER_SIZE];
+		for (int i = 1; i < _nfds; i++)
+		{
+			if (_pfds[i].revents & POLLIN)
+			{
+				int bytes = read(_pfds[i].fd, buf, BUFFER_SIZE);
+				if (bytes <= 0)
+				{
+					//client disconnected
+					close(_pfds[i].fd);
+					_pfds[i].fd = -1;
+					_nfds--;
+					std::cout << "Client disconnected" << std::endl;
+				} else {
+					buf[bytes] = '\0';
+					std::cout << "Message received: " << buf << std::endl;
+					parse_message(std::string(buf), _clients[i - 1]);
+				}
+			}
+		}
+		// MOVE TO FUNCTION ^^^
+		
 	}
 }
 
+void Server::parse_message(std::string message, Client sender)
+{
+	//Parses the message received, acts on it and sends to appropriate response to sender ig
+	//should make this different parts maybe
+
+	// std::istringstream msgs(message);
+	// std::string cmd;
+	// std::getline(msgs, cmd, ' '); //gets first word
+
+	// if (cmd == "")
+}
+
+size_t Server::find_empty_slot()
+{
+	for (size_t i = 1; i <= MAX_CLIENTS; i++)
+	{
+		if (_pfds[i].fd == -1)
+			return i;
+	}
+	return -1; //should not happen because only called if server is not full
+}
+
+
 void Server::accept_new_clients()
 {
-	int newsockfd;
-	struct sockaddr_in cli_addr;
-	socklen_t addr_len = sizeof(cli_addr);
+	// int newsockfd;
+	// struct sockaddr_in cli_addr;
+	// socklen_t addr_len = sizeof(cli_addr);
 
 	while (_pfds[0].revents & POLLIN)
 	{
 		Client client;
-		newsockfd = accept(_sockfd, (struct sockaddr *)&cli_addr, &addr_len);
-		if (newsockfd < 0)
+		client.fd = accept(_sockfd, (struct sockaddr *)&client.addr, &client.addrlen);
+		// newsockfd = accept(_sockfd, (struct sockaddr *)&cli_addr, &addr_len);
+		if (client.fd < 0)
+		// if (newsockfd < 0)
 		{
 			if (errno == EWOULDBLOCK || errno == EAGAIN)
 				break ;
@@ -91,10 +141,21 @@ void Server::accept_new_clients()
 		}
 		if (_nfds <= MAX_CLIENTS)
 		{
-			_pfds[_nfds].fd = newsockfd;
-			_pfds[_nfds].events = POLLIN;
 			_nfds++;
-			
+			size_t slot = find_empty_slot();
+			_pfds[slot].fd = client.fd;
+			// _pfds[_nfds].fd = newsockfd;
+			_pfds[slot].events = POLLIN;
+			_clients[slot - 1] = client;
+			//add_client(newsockfd, cli_addr)
+			std::cout << "Connection accepted: " << client.fd << std::endl;
+		}
+		else
+		{
+			std::cout << "Connection refused. Sever is full." << std::endl;
+			write(client.fd, "ERROR :Server full, try again later\r\n", 38);
+			close(client.fd);
+			// close(newsockfd);
 		}
 	}
 }

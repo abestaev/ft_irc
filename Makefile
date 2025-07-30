@@ -1,6 +1,6 @@
 NAME		= ircserv
 SRCDIR		= src
-SRCS		= main.cpp
+SRCS		= main.cpp Server.cpp Client.cpp
 SRCS		:= $(addprefix $(SRCDIR)/, $(SRCS))
 INCDIR		= inc
 INCS		= ft_irc.hpp

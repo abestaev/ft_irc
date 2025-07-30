@@ -1,8 +1,5 @@
 #include "ft_irc.hpp"
 
-#include <cstdlib>
-#include <cstdio>
-
 void error(std::string msg)
 {
 	perror(msg.c_str());
