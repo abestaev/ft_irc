@@ -84,10 +84,11 @@ void Server::run()
 					close(_pfds[i].fd);
 					_pfds[i].fd = -1;
 					_nfds--;
+					_clients[i - 1] = Client();
 					std::cout << "Client disconnected" << std::endl;
 				} else {
 					buf[bytes] = '\0';
-					std::cout << "Message received: " << buf << std::endl;
+					std::cout << "Message received: <" << buf << ">" << std::endl;
 					parse_message(std::string(buf), _clients[i - 1]);
 				}
 			}
@@ -97,8 +98,45 @@ void Server::run()
 	}
 }
 
-void Server::parse_message(std::string message, Client sender)
+void Server::parse_message(std::string message, Client& sender)
 {
+	// CURRENT CODE IS FOR TESTING PURPOSES, NOT IRC COMPLIANT AT ALL
+	// ALSO DISGUSTING
+	if (message.compare(0, 6, "CAP LS") == 0) {
+		write(sender.fd, "CAP * LS\r\n", 11);
+		return ;
+	}
+
+	if (message.compare(0, 5, "PASS ") == 0) {
+		if (message.compare(5, message.size() - 5, _pass + "\r\n") == 0) {
+			sender.password_is_valid = true;
+			// right password
+		} else {
+			// wrong password
+			write(sender.fd, "ERROR :Wrong Password", 22);
+			close(sender.fd);
+			sender.pfdp->fd = -1;
+			_nfds--;
+		}
+		return ;
+	} else if (message.compare(0, 4, "PASS") == 0) {
+		// no password given
+		write(sender.fd, "ERROR :Wrong Password", 22); // NOT THE CORRECT ERROR / TESTING PURPOSES
+		close(sender.fd);
+		sender.pfdp->fd = -1;
+		_nfds--;
+		return ;
+	}
+
+	if (!sender.password_is_valid) {
+		write(sender.fd, "ERROR :Password required", 25); // NOT THE CORRECT ERROR / TESTING PURPOSES
+		std::cout << "PASSWORD REQUIRED" << std::endl;
+		close(sender.fd);
+		sender.pfdp->fd = -1;
+		_nfds--;
+		return ;
+	}
+
 	//Parses the message received, acts on it and sends to appropriate response to sender ig
 	//should make this different parts maybe
 
@@ -146,6 +184,7 @@ void Server::accept_new_clients()
 			_pfds[slot].fd = client.fd;
 			// _pfds[_nfds].fd = newsockfd;
 			_pfds[slot].events = POLLIN;
+			client.pfdp = &(_pfds[slot]);
 			_clients[slot - 1] = client;
 			//add_client(newsockfd, cli_addr)
 			std::cout << "Connection accepted: " << client.fd << std::endl;

@@ -34,6 +34,7 @@ class Client //not a big fan of how everything is public but so much simpler. wi
 private:
 public:
 	int fd;
+	struct pollfd *pfdp;
 	// struct pollfd &pfd;
 	socklen_t addrlen;
 	struct sockaddr_in addr;
@@ -89,7 +90,7 @@ private:
 	
 	void accept_new_clients();
 	size_t find_empty_slot();
-	void parse_message(std::string, Client);
+	void parse_message(std::string, Client&);
 	// void add_client(int clifd, struct sockaddr_in cliaddr);
 	// Server();
 public:
@@ -103,7 +104,9 @@ public:
 class Channel
 {
 private:
-	std::string _owner;
+	// std::string _owner;
+	Client _owner;
+	Client _clients[MAX_CLIENTS];
 };
 
 void error(std::string msg);
