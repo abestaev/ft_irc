@@ -1,54 +1,35 @@
-#******************************************************************************#
-#                                                                              #
-#                                                         :::      ::::::::    #
-#    Makefile                                           :+:      :+:    :+:    #
-#                                                     +:+ +:+         +:+      #
-#    By: bazaluga <bazaluga@student.42.fr>          +#+  +:+       +#+         #
-#                                                 +#+#+#+#+#+   +#+            #
-#    Created: 2025/05/27 20:45:45 by bazaluga          #+#    #+#              #
-#    Updated: 2025/07/02 19:18:52 by bazaluga         ###   ########.fr        #
-#                                                                              #
-#******************************************************************************#
-
-NAME		:=	ircserv
-SRCDIR	    :=	src
-OBJDIR	    :=	.obj
-SRC		    :=	main.cpp
-OBJ		    :=	$(SRC:.cpp=.o)
-SRC		    :=	$(addprefix $(SRCDIR)/, $(SRC))
-OBJ		    :=	$(addprefix $(OBJDIR)/, $(OBJ))
-CPPFLAGS	:=	-Wall -Wextra -Werror -std=c++98 -MMD
-CC			:=	c++
-
-# colors
-GREEN		:=	"\033[1;32m"
-RED			:=	"\033[1;33m"
-RESET		:=	"\033[0m"
-
-all:		$(NAME)
-
-$(NAME):	$(OBJ)
-			@$(CC) $(OBJ) -o $(NAME)
-			@printf $(GREEN)"🚀 $(NAME) was successfully built.\n\n🏃‍Run ./ircserv <port> <password> to get started.\n"$(RESET)
+NAME		= ircserv
+SRCDIR		= src
+SRCS		= main.cpp Server.cpp Client.cpp Message.cpp Channel.cpp
+SRCS		:= $(addprefix $(SRCDIR)/, $(SRCS))
+INCDIR		= inc
+INCS		= ft_irc.hpp
+INCS		:= $(addprefix $(INCDIR)/, $(INCS))
+OBJDIR		= .obj
+OBJS		= $(SRCS:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
+RM			= rm -rf
+CPPFLAGS	= -Wall -Wextra -Werror -std=c++98 -g3
+CPPC		= c++
 
 $(OBJDIR):
-			mkdir -p $(OBJDIR)
+	@mkdir $(OBJDIR)
 
-$(OBJDIR)/%.o:	$(SRCDIR)/%.cpp | $(OBJDIR)
-				@echo $(GREEN)"⚙️ Compiling..."$(RESET)
-				$(CC) $(CPPFLAGS) -c $< -o $@
+$(NAME): $(OBJDIR) $(OBJS) $(INCS)
+	$(CPPC) $(CPPFLAGS) $(OBJS) -I$(INCDIR) -o $(NAME)
 
--include	$(OBJ:.o=.d)
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp
+	$(CPPC) $(CPPFLAGS) -I$(INCDIR) -o $@ -c $^
+
+all: $(NAME)
 
 clean:
-		@rm -f $(OBJ)
-		@rm -f $(OBJ:.o=.d)
-		@printf $(RED)"🗑️ object files deleted.\n"$(RESET)
+	@echo removing $(OBJS)
+	@$(RM) $(OBJS) $(OBJDIR)
 
-fclean:	clean
-		@rm -f $(NAME)
-		@printf $(RED)"❌ You just deleted all the compiler's work...\n"$(RESET)
+fclean: clean
+	@echo removing $(NAME)
+	@$(RM) $(NAME)
 
-re:		fclean $(NAME)
+re: fclean all
 
-.PHONY:	all clean fclean
+.PHONY: all clean fclean re
