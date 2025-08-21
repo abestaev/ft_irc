@@ -1,48 +1,44 @@
+#include "Server.hpp"
 #include "ft_irc.hpp"
+#include <iostream>
+#include <unistd.h>
+#include <cstring>
+#include <fcntl.h>
+#include <cerrno>
+#include <arpa/inet.h>
+#include <cstdlib>
+#include <cstdio>
 
-// Server::Server(): _port(-1), _pass("")
-// {}
-
-Server::Server(int port, std::string pass): _port(port), _pass(pass)
+Server::Server(int port, std::string pass): _port(port), _pass(pass), _sockfd(-1), _nfds(0)
 {
-	//////// MOVED TO INIT_SERVER METHOD /////////
-	// _sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	// if (_sockfd < 0)
-	// 	error("socket error");
-	// // override "TIME_WAIT state" behavior / allows port to be reused immediatly
-	// int opt = 1; //P
-	// setsockopt(_sockfd, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt));
-	// int flags = fcntl(_sockfd, F_GETFL, 0);
-	// fcntl(_sockfd, F_SETFL, flags | O_NONBLOCK);
-
-	// _addr.sin_family = AF_INET;
-	// _addr.sin_addr.s_addr = INADDR_ANY;
-	// _addr.sin_port = htons(_port);
-
-	// if (bind(_sockfd, (struct sockaddr *) &_addr, sizeof(_addr)) < 0)
-	// 	error("bind error");
-
-	// _nfds = 1;
-	// _pfds[0].fd = _sockfd;
-	// _pfds[0].events = POLLIN;
-	// for (int i = 1; i <= MAX_CLIENTS; i++)
-	// 	_pfds[i].fd = -1;
-
-	//listen(sockfd, SOMAXCONN);
+	// Initialize client array
+	for (int i = 0; i < MAX_CLIENTS; i++)
+	{
+		_clients[i] = Client();
+	}
 }
-Server::~Server() {}
 
-void	Server::init()
+Server::~Server() 
+{
+	if (_sockfd != -1)
+		close(_sockfd);
+}
+
+void Server::init()
 {
 	_sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (_sockfd < 0)
 		error("socket error");
-	// override "TIME_WAIT state" behavior / allows port to be reused immediatly
-	int opt = 1; //P
+	
+	// Allow port reuse to avoid TIME_WAIT state
+	int opt = 1;
 	setsockopt(_sockfd, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt));
+	
+	// Make socket non-blocking
 	int flags = fcntl(_sockfd, F_GETFL, 0);
 	fcntl(_sockfd, F_SETFL, flags | O_NONBLOCK);
 
+	// Configure server address
 	_addr.sin_family = AF_INET;
 	_addr.sin_addr.s_addr = INADDR_ANY;
 	_addr.sin_port = htons(_port);
@@ -50,9 +46,12 @@ void	Server::init()
 	if (bind(_sockfd, (struct sockaddr *) &_addr, sizeof(_addr)) < 0)
 		error("bind error");
 
+	// Initialize poll array
 	_nfds = 1;
 	_pfds[0].fd = _sockfd;
 	_pfds[0].events = POLLIN;
+	
+	// Mark all client slots as empty
 	for (int i = 1; i <= MAX_CLIENTS; i++)
 		_pfds[i].fd = -1;
 }
@@ -61,90 +60,116 @@ void Server::run()
 {
 	listen(_sockfd, SOMAXCONN);
 	std::cout << "Server is now listening on socket " << _sockfd << std::endl;
-	std::cout << "Address: " << inet_ntoa(_addr.sin_addr) << std::endl;
+	std::cout << "Address: " << inet_ntoa(_addr.sin_addr) << ":" << _port << std::endl;
 
 	while (true)
 	{
 		if (poll(_pfds, _nfds, -1) < 0)
 			error("poll error");
 		
-		//new connections
+		// Handle new connections
 		accept_new_clients();
 
-		// MOVE TO FUNCTION vvv
-		char buf[BUFFER_SIZE];
-		for (int i = 1; i < _nfds; i++)
+		// Process messages from existing clients
+		process_client_messages();
+	}
+}
+
+void Server::process_client_messages()
+{
+	char buf[BUFFER_SIZE];
+	
+	for (int i = 1; i < _nfds; i++)
+	{
+		if (_pfds[i].revents & POLLIN)
 		{
-			if (_pfds[i].revents & POLLIN)
+			int bytes = read(_pfds[i].fd, buf, BUFFER_SIZE);
+			if (bytes <= 0)
 			{
-				int bytes = read(_pfds[i].fd, buf, BUFFER_SIZE);
-				if (bytes <= 0)
-				{
-					//client disconnected
-					close(_pfds[i].fd);
-					_pfds[i].fd = -1;
-					_nfds--;
-					_clients[i - 1] = Client();
-					std::cout << "Client disconnected" << std::endl;
-				} else {
-					buf[bytes] = '\0';
-					std::cout << "Message received: <" << buf << ">" << std::endl;
-					parse_message(std::string(buf), _clients[i - 1]);
-				}
+				handle_client_disconnect(i);
+			} 
+			else 
+			{
+				buf[bytes] = '\0';
+				std::cout << "Message received: <" << buf << ">" << std::endl;
+				parse_message(std::string(buf), _clients[i - 1]);
 			}
 		}
-		// MOVE TO FUNCTION ^^^
-		
 	}
+}
+
+void Server::handle_client_disconnect(int client_index)
+{
+	close(_pfds[client_index].fd);
+	_pfds[client_index].fd = -1;
+	_clients[client_index - 1] = Client();
+	
+	// Compact the poll array
+	for (int j = client_index; j < _nfds - 1; j++)
+	{
+		_pfds[j] = _pfds[j + 1];
+		_clients[j - 1] = _clients[j];
+	}
+	_nfds--;
+	
+	std::cout << "Client disconnected" << std::endl;
 }
 
 void Server::parse_message(std::string message, Client& sender)
 {
-	// CURRENT CODE IS FOR TESTING PURPOSES, NOT IRC COMPLIANT AT ALL
-	// ALSO DISGUSTING
-	if (message.compare(0, 6, "CAP LS") == 0) {
+	// Parse the IRC message
+	Message irc_message = parse_irc_message(message);
+	
+	// Handle the parsed command
+	handle_command(irc_message, sender);
+}
+
+Message Server::parse_irc_message(const std::string& raw_message)
+{
+	return Message(raw_message);
+}
+
+void Server::handle_command(const Message& msg, Client& sender)
+{
+	const std::string& command = msg.getCommand();
+	
+	// Handle CAP LS command
+	if (command == "CAP" && msg.getParamCount() >= 1 && msg.getParams()[0] == "LS") {
 		write(sender.fd, "CAP * LS\r\n", 11);
-		return ;
+		return;
 	}
 
-	if (message.compare(0, 5, "PASS ") == 0) {
-		if (message.compare(5, message.size() - 5, _pass + "\r\n") == 0) {
-			sender.password_is_valid = true;
-			// right password
+	// Handle PASS command
+	if (command == "PASS") {
+		if (msg.getParamCount() >= 1) {
+			std::string password = msg.getParams()[0];
+			if (password == _pass) {
+				sender.password_is_valid = true;
+				write(sender.fd, "PASS :Password accepted\r\n", 25);
+			} else {
+				write(sender.fd, "ERROR :Wrong Password\r\n", 23);
+				close(sender.fd);
+				return;
+			}
 		} else {
-			// wrong password
-			write(sender.fd, "ERROR :Wrong Password", 22);
+			write(sender.fd, "ERROR :Password required\r\n", 25);
 			close(sender.fd);
-			sender.pfdp->fd = -1;
-			_nfds--;
+			return;
 		}
-		return ;
-	} else if (message.compare(0, 4, "PASS") == 0) {
-		// no password given
-		write(sender.fd, "ERROR :Wrong Password", 22); // NOT THE CORRECT ERROR / TESTING PURPOSES
-		close(sender.fd);
-		sender.pfdp->fd = -1;
-		_nfds--;
-		return ;
+		return;
 	}
 
+	// Require password for other commands
 	if (!sender.password_is_valid) {
-		write(sender.fd, "ERROR :Password required", 25); // NOT THE CORRECT ERROR / TESTING PURPOSES
-		std::cout << "PASSWORD REQUIRED" << std::endl;
-		close(sender.fd);
-		sender.pfdp->fd = -1;
-		_nfds--;
-		return ;
+		write(sender.fd, "ERROR :Password required\r\n", 25);
+		return;
 	}
 
-	//Parses the message received, acts on it and sends to appropriate response to sender ig
-	//should make this different parts maybe
-
-	// std::istringstream msgs(message);
-	// std::string cmd;
-	// std::getline(msgs, cmd, ' '); //gets first word
-
-	// if (cmd == "")
+	// TODO: Implement other IRC commands (NICK, USER, JOIN, etc.)
+	std::cout << "Unhandled command: " << command << " with " << msg.getParamCount() << " params" << std::endl;
+	if (msg.hasTrailing()) {
+		std::cout << "Unhandled command: " << command << " with " << msg.getParamCount() << " params" << std::endl;
+	}
 }
 
 size_t Server::find_empty_slot()
@@ -154,47 +179,48 @@ size_t Server::find_empty_slot()
 		if (_pfds[i].fd == -1)
 			return i;
 	}
-	return -1; //should not happen because only called if server is not full
+	return 0; // No empty slot available
 }
-
 
 void Server::accept_new_clients()
 {
-	// int newsockfd;
-	// struct sockaddr_in cli_addr;
-	// socklen_t addr_len = sizeof(cli_addr);
-
 	while (_pfds[0].revents & POLLIN)
 	{
 		Client client;
+		client.addrlen = sizeof(client.addr);
+		
 		client.fd = accept(_sockfd, (struct sockaddr *)&client.addr, &client.addrlen);
-		// newsockfd = accept(_sockfd, (struct sockaddr *)&cli_addr, &addr_len);
 		if (client.fd < 0)
-		// if (newsockfd < 0)
 		{
 			if (errno == EWOULDBLOCK || errno == EAGAIN)
-				break ;
+				break;
 			perror("accept error");
-			break ;
+			break;
 		}
+		
 		if (_nfds <= MAX_CLIENTS)
 		{
-			_nfds++;
 			size_t slot = find_empty_slot();
-			_pfds[slot].fd = client.fd;
-			// _pfds[_nfds].fd = newsockfd;
-			_pfds[slot].events = POLLIN;
-			client.pfdp = &(_pfds[slot]);
-			_clients[slot - 1] = client;
-			//add_client(newsockfd, cli_addr)
-			std::cout << "Connection accepted: " << client.fd << std::endl;
+			if (slot > 0)
+			{
+				_pfds[slot].fd = client.fd;
+				_pfds[slot].events = POLLIN;
+				client.pfdp = &(_pfds[slot]);
+				_clients[slot - 1] = client;
+				_nfds++;
+				std::cout << "Connection accepted: " << client.fd << std::endl;
+			}
+			else
+			{
+				std::cout << "No available slots for new connection" << std::endl;
+				close(client.fd);
+			}
 		}
 		else
 		{
-			std::cout << "Connection refused. Sever is full." << std::endl;
+			std::cout << "Connection refused. Server is full." << std::endl;
 			write(client.fd, "ERROR :Server full, try again later\r\n", 38);
 			close(client.fd);
-			// close(newsockfd);
 		}
 	}
 }
