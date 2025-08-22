@@ -91,9 +91,34 @@ private:
 	void accept_new_clients();
 	size_t find_empty_slot();
 	void parse_message(std::string, Client&);
+	// void close_connection(either fd or index ig) 
 	// void add_client(int clifd, struct sockaddr_in cliaddr);
 	// Server();
-public:
+
+	// COMMANDS
+	int msg_cap(int, std::string *, Client &);
+	int msg_pass(int, std::string *, Client &);
+	int msg_nick(int, std::string *, Client &);
+	int msg_user(int, std::string *, Client &);
+	int msg_ping(int, std::string *, Client &);
+	int msg_pong(int, std::string *, Client &);
+	int msg_oper(int, std::string *, Client &);
+	int msg_quit(int, std::string *, Client &);
+	int msg_error(int, std::string *, Client &);
+	int msg_join(int, std::string *, Client &);
+	int msg_part(int, std::string *, Client &);
+	int msg_topic(int, std::string *, Client &);
+	int msg_list(int, std::string *, Client &);
+	int msg_names(int, std::string *, Client &);
+	int msg_invite(int, std::string *, Client &);
+	int msg_kick(int, std::string *, Client &);
+	// int msg_help(int, std::string *, Client &);
+	int msg_mode(int, std::string *, Client &);
+	int msg_privmsg(int, std::string *, Client &);
+	int msg_kill(int, std::string *, Client &);
+
+
+	public:
 	Server(int, std::string);
 	~Server();
 
@@ -104,7 +129,7 @@ public:
 class Channel
 {
 private:
-	// std::string _owner;
+	std::string _name;
 	Client _owner;
 	Client _clients[MAX_CLIENTS];
 };

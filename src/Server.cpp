@@ -157,7 +157,6 @@ size_t Server::find_empty_slot()
 	return -1; //should not happen because only called if server is not full
 }
 
-
 void Server::accept_new_clients()
 {
 	// int newsockfd;

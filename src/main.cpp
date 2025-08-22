@@ -31,6 +31,10 @@ int	main(int ac, char **av)
 	server.init();
 	server.run();
 
+
+	return ;
+
+
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 		
 	if (sockfd < 0)
