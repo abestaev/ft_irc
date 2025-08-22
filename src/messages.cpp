@@ -46,7 +46,7 @@ KILL <nickname> <comment>
 
 */
 
-int Server::msg_cap(int argc, std::string * args, Client & sender)
+int Server::cmd_cap(int argc, std::string * args, Client & sender)
 {
 	if (argc < 2) {
 		//  ERR_NEEDMOREPARAMS (461)
@@ -62,7 +62,7 @@ int Server::msg_cap(int argc, std::string * args, Client & sender)
 // AUTHENTICATE ?
 //
 
-int Server::msg_pass(int argc, std::string * args, Client & sender)
+int Server::cmd_pass(int argc, std::string * args, Client & sender)
 {
 	if (argc < 2) {
 		// ERR_NEEDMOREPARAMS (461)
@@ -73,7 +73,7 @@ int Server::msg_pass(int argc, std::string * args, Client & sender)
 	}
 }
 
-int Server::msg_nick(int argc, std::string * args, Client & sender)
+int Server::cmd_nick(int argc, std::string * args, Client & sender)
 {
 	if (argc < 2) {
 		// ERR_NEEDMOREPARAMS (461)
