@@ -8,6 +8,10 @@
 #include <arpa/inet.h>
 #include <cstdlib>
 #include <cstdio>
+#include <signal.h>
+
+// Initialize static member
+bool Server::_sig = false;
 
 Server::Server(int port, std::string pass): _port(port), _pass(pass), _sockfd(-1), _nfds(0)
 {
@@ -16,12 +20,33 @@ Server::Server(int port, std::string pass): _port(port), _pass(pass), _sockfd(-1
 	{
 		_clients[i] = Client();
 	}
+	
+	// Initialize commands handler
+	_commands = new Commands(this);
+	
+	// Setup signal handlers
+	setup_signal_handlers();
 }
 
 Server::~Server() 
 {
 	if (_sockfd != -1)
 		close(_sockfd);
+	if (_commands)
+		delete _commands;
+}
+
+void Server::signal_handler(int sig)
+{
+	(void)sig;
+	std::cout << "\nReceived signal, shutting down server..." << std::endl;
+	_sig = true;
+}
+
+void Server::setup_signal_handlers()
+{
+	signal(SIGINT, signal_handler);   // Ctrl+C
+	signal(SIGTERM, signal_handler);  // kill command
 }
 
 void Server::init()
@@ -51,8 +76,8 @@ void Server::init()
 	_pfds[0].fd = _sockfd;
 	_pfds[0].events = POLLIN;
 	
-	// Mark all client slots as empty
-	for (int i = 1; i <= MAX_CLIENTS; i++)
+	// Mark all client slots as empty - CORRECTION: Change <= to <
+	for (int i = 1; i < MAX_CLIENTS; i++)
 		_pfds[i].fd = -1;
 }
 
@@ -61,18 +86,50 @@ void Server::run()
 	listen(_sockfd, SOMAXCONN);
 	std::cout << "Server is now listening on socket " << _sockfd << std::endl;
 	std::cout << "Address: " << inet_ntoa(_addr.sin_addr) << ":" << _port << std::endl;
+	std::cout << "Press Ctrl+C to stop the server" << std::endl;
 
-	while (true)
+	while (!_sig)  // Changed from while(true) to while(!_sig)
 	{
-		if (poll(_pfds, _nfds, -1) < 0)
-			error("poll error");
+		std::cout << "Poll loop iteration - nfds: " << _nfds << std::endl;
 		
-		// Handle new connections
-		accept_new_clients();
+		// Use a timeout of 1000ms (1 second) instead of -1 (blocking)
+		int poll_result = poll(_pfds, _nfds, 1000);
+		std::cout << "Poll result: " << poll_result << std::endl;
+		
+		if (poll_result < 0)
+		{
+			if (errno == EINTR)
+			{
+				// Interrupted by signal, check if we should stop
+				if (_sig)
+					break;
+				continue;
+			}
+			error("poll error");
+		}
+		else if (poll_result == 0)
+		{
+			std::cout << "Poll timeout (no events)" << std::endl;
+		}
+		else
+		{
+			std::cout << "Poll returned " << poll_result << " events" << std::endl;
+			
+			// CRITICAL FIX: Check for new connections FIRST, then process messages
+			if (_pfds[0].revents & POLLIN)
+			{
+				std::cout << "New connection event detected" << std::endl;
+				accept_new_clients();
+				// CRITICAL FIX: Reset the event flag to prevent infinite loop
+				_pfds[0].revents = 0;
+			}
 
-		// Process messages from existing clients
-		process_client_messages();
+			// Process messages from existing clients
+			process_client_messages();
+		}
 	}
+	
+	std::cout << "Server shutting down..." << std::endl;
 }
 
 void Server::process_client_messages()
@@ -83,15 +140,20 @@ void Server::process_client_messages()
 	{
 		if (_pfds[i].revents & POLLIN)
 		{
+			std::cout << "Reading from client " << i << " (fd: " << _pfds[i].fd << ")" << std::endl;
+			
 			int bytes = read(_pfds[i].fd, buf, BUFFER_SIZE);
 			if (bytes <= 0)
 			{
+				std::cout << "Client " << i << " disconnected (bytes: " << bytes << ")" << std::endl;
 				handle_client_disconnect(i);
 			} 
 			else 
 			{
 				buf[bytes] = '\0';
-				std::cout << "Message received: <" << buf << ">" << std::endl;
+				std::cout << "Message received from client " << i << ": <" << buf << ">" << std::endl;
+				
+				// Parse and handle the message
 				parse_message(std::string(buf), _clients[i - 1]);
 			}
 		}
@@ -104,11 +166,12 @@ void Server::handle_client_disconnect(int client_index)
 	_pfds[client_index].fd = -1;
 	_clients[client_index - 1] = Client();
 	
-	// Compact the poll array
+	// Compact the poll array - CORRECTION: Prevent negative indexing
 	for (int j = client_index; j < _nfds - 1; j++)
 	{
 		_pfds[j] = _pfds[j + 1];
-		_clients[j - 1] = _clients[j];
+		if (j > 0)  // Prevent negative indexing
+			_clients[j - 1] = _clients[j];
 	}
 	_nfds--;
 	
@@ -117,8 +180,12 @@ void Server::handle_client_disconnect(int client_index)
 
 void Server::parse_message(std::string message, Client& sender)
 {
+	std::cout << "Parsing message: <" << message << "> for client " << sender.fd << std::endl;
+	
 	// Parse the IRC message
 	Message irc_message = parse_irc_message(message);
+	
+	std::cout << "Parsed command: " << irc_message.getCommand() << " with " << irc_message.getParamCount() << " params" << std::endl;
 	
 	// Handle the parsed command
 	handle_command(irc_message, sender);
@@ -131,50 +198,14 @@ Message Server::parse_irc_message(const std::string& raw_message)
 
 void Server::handle_command(const Message& msg, Client& sender)
 {
-	const std::string& command = msg.getCommand();
-	
-	// Handle CAP LS command
-	if (command == "CAP" && msg.getParamCount() >= 1 && msg.getParams()[0] == "LS") {
-		write(sender.fd, "CAP * LS\r\n", 11);
-		return;
-	}
-
-	// Handle PASS command
-	if (command == "PASS") {
-		if (msg.getParamCount() >= 1) {
-			std::string password = msg.getParams()[0];
-			if (password == _pass) {
-				sender.password_is_valid = true;
-				write(sender.fd, "PASS :Password accepted\r\n", 25);
-			} else {
-				write(sender.fd, "ERROR :Wrong Password\r\n", 23);
-				close(sender.fd);
-				return;
-			}
-		} else {
-			write(sender.fd, "ERROR :Password required\r\n", 25);
-			close(sender.fd);
-			return;
-		}
-		return;
-	}
-
-	// Require password for other commands
-	if (!sender.password_is_valid) {
-		write(sender.fd, "ERROR :Password required\r\n", 25);
-		return;
-	}
-
-	// TODO: Implement other IRC commands (NICK, USER, JOIN, etc.)
-	std::cout << "Unhandled command: " << command << " with " << msg.getParamCount() << " params" << std::endl;
-	if (msg.hasTrailing()) {
-		std::cout << "Unhandled command: " << command << " with " << msg.getParamCount() << " params" << std::endl;
-	}
+	// Use the Commands class to handle all IRC commands
+	_commands->execute_command(msg, sender);
 }
 
 size_t Server::find_empty_slot()
 {
-	for (size_t i = 1; i <= MAX_CLIENTS; i++)
+	// CORRECTION: Change <= to < to prevent array overflow
+	for (size_t i = 1; i < MAX_CLIENTS; i++)
 	{
 		if (_pfds[i].fd == -1)
 			return i;
@@ -198,7 +229,8 @@ void Server::accept_new_clients()
 			break;
 		}
 		
-		if (_nfds <= MAX_CLIENTS)
+		// CORRECTION: Change <= to < to prevent overflow
+		if (_nfds < MAX_CLIENTS)
 		{
 			size_t slot = find_empty_slot();
 			if (slot > 0)
@@ -208,7 +240,7 @@ void Server::accept_new_clients()
 				client.pfdp = &(_pfds[slot]);
 				_clients[slot - 1] = client;
 				_nfds++;
-				std::cout << "Connection accepted: " << client.fd << std::endl;
+				std::cout << "Connection accepted: " << client.fd << " in slot " << slot << std::endl;
 			}
 			else
 			{
@@ -223,4 +255,7 @@ void Server::accept_new_clients()
 			close(client.fd);
 		}
 	}
+	
+	// CRITICAL FIX: Reset the event flag to prevent infinite loop
+	_pfds[0].revents = 0;
 }

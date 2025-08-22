@@ -25,6 +25,7 @@
 #include "Client.hpp"
 #include "Server.hpp"
 #include "Channel.hpp"
+#include "Commands.hpp"
 
 // Constants
 #define DEFAULT_PORT 6667

@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include "Client.hpp"
 #include "Message.hpp"
+#include "Commands.hpp"
 
 #define MAX_CLIENTS 10
 #define BUFFER_SIZE 1024
@@ -21,6 +22,7 @@ private:
 	Client _clients[MAX_CLIENTS];
 	int _nfds;
 	struct pollfd _pfds[MAX_CLIENTS + 1];
+	Commands* _commands;
 	
 	void accept_new_clients();
 	size_t find_empty_slot();
@@ -31,6 +33,10 @@ private:
 	// New parsing methods
 	Message parse_irc_message(const std::string& raw_message);
 	void handle_command(const Message& msg, Client& sender);
+	
+	// Signal handling
+	static void signal_handler(int sig);
+	void setup_signal_handlers();
 
 public:
 	Server(int port, std::string pass);
@@ -38,6 +44,14 @@ public:
 
 	void init();
 	void run();
+	
+	// Getters for Commands class
+	const std::string& getPassword() const { return _pass; }
+	Client* getClients() { return _clients; }
+	int getMaxClients() const { return MAX_CLIENTS; }
+	
+	// Signal handling
+	static bool should_stop() { return _sig; }
 };
 
 #endif

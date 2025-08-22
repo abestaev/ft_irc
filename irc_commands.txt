@@ -1,0 +1,7 @@
+CAP LS
+PASS testpass
+NICK jsommet
+USER jsommet jsommet localhost :Joseph Sommet
+JOIN #test
+PRIVMSG #test :Hello World!
+QUIT :Testing complete
