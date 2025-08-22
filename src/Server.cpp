@@ -90,7 +90,7 @@ void Server::run()
 
 	while (!_sig)  // Changed from while(true) to while(!_sig)
 	{
-		std::cout << "Poll loop iteration - nfds: " << _nfds << std::endl;
+		std::cout << "Poll loop iteration - nfds: " << _nfds << " (max: " << MAX_CLIENTS << ")" << std::endl;
 		
 		// Use a timeout of 1000ms (1 second) instead of -1 (blocking)
 		int poll_result = poll(_pfds, _nfds, 1000);
@@ -124,8 +124,13 @@ void Server::run()
 				_pfds[0].revents = 0;
 			}
 
-			// Process messages from existing clients
-			process_client_messages();
+			// CRITICAL FIX: Only process client messages if there are clients
+			if (_nfds > 1) {
+				std::cout << "Processing messages from " << (_nfds - 1) << " clients" << std::endl;
+				process_client_messages();
+			} else {
+				std::cout << "No clients to process messages from" << std::endl;
+			}
 		}
 	}
 	
@@ -136,8 +141,13 @@ void Server::process_client_messages()
 {
 	char buf[BUFFER_SIZE];
 	
+	std::cout << "DEBUG: process_client_messages() called with _nfds = " << _nfds << std::endl;
+	
 	for (int i = 1; i < _nfds; i++)
 	{
+		std::cout << "DEBUG: Checking client " << i << " (fd: " << _pfds[i].fd << ", revents: " << _pfds[i].revents << ")" << std::endl;
+		
+		// CRITICAL FIX: Handle all event types, not just POLLIN
 		if (_pfds[i].revents & POLLIN)
 		{
 			std::cout << "Reading from client " << i << " (fd: " << _pfds[i].fd << ")" << std::endl;
@@ -153,29 +163,77 @@ void Server::process_client_messages()
 				buf[bytes] = '\0';
 				std::cout << "Message received from client " << i << ": <" << buf << ">" << std::endl;
 				
-				// Parse and handle the message
-				parse_message(std::string(buf), _clients[i - 1]);
+				// CRITICAL FIX: Validate client index before accessing
+				if (i - 1 < MAX_CLIENTS) {
+					parse_message(std::string(buf), _clients[i - 1]);
+				} else {
+					std::cout << "ERROR: Invalid client index " << (i - 1) << " for client " << i << std::endl;
+				}
 			}
+		}
+		
+		// CRITICAL FIX: Handle POLLOUT events (client ready to receive data)
+		if (_pfds[i].revents & POLLOUT)
+		{
+			std::cout << "Client " << i << " ready to receive data (POLLOUT)" << std::endl;
+			
+			// TEST: Send a welcome message to the client
+			std::string welcome_msg = "Welcome to ft-irc server!\r\n";
+			int bytes_sent = write(_pfds[i].fd, welcome_msg.c_str(), welcome_msg.length());
+			if (bytes_sent > 0) {
+				std::cout << "Sent welcome message to client " << i << " (" << bytes_sent << " bytes)" << std::endl;
+			} else {
+				std::cout << "Failed to send welcome message to client " << i << std::endl;
+			}
+		}
+		
+		// CRITICAL FIX: Handle POLLERR events (client error)
+		if (_pfds[i].revents & POLLERR)
+		{
+			std::cout << "Client " << i << " has error (POLLERR) - fd: " << _pfds[i].fd << std::endl;
+			
+			// Get socket error details
+			int error = 0;
+			socklen_t len = sizeof(error);
+			if (getsockopt(_pfds[i].fd, SOL_SOCKET, SO_ERROR, &error, &len) == 0) {
+				std::cout << "Socket error code: " << error << " (" << strerror(error) << ")" << std::endl;
+			}
+			
+			handle_client_disconnect(i);
+		}
+		
+		// CRITICAL FIX: Reset event flags ONLY if we processed them
+		if (_pfds[i].revents != 0) {
+			std::cout << "DEBUG: Resetting events for client " << i << " (was: " << _pfds[i].revents << ")" << std::endl;
+			_pfds[i].revents = 0;
 		}
 	}
 }
 
 void Server::handle_client_disconnect(int client_index)
 {
+	// CRITICAL FIX: Validate client_index before processing
+	if (client_index < 1 || client_index >= _nfds) {
+		std::cout << "Invalid client index: " << client_index << std::endl;
+		return;
+	}
+	
 	close(_pfds[client_index].fd);
 	_pfds[client_index].fd = -1;
 	_clients[client_index - 1] = Client();
 	
-	// Compact the poll array - CORRECTION: Prevent negative indexing
+	// Compact the poll array - IMPROVED: Better bounds checking
 	for (int j = client_index; j < _nfds - 1; j++)
 	{
 		_pfds[j] = _pfds[j + 1];
-		if (j > 0)  // Prevent negative indexing
+		// CRITICAL FIX: Ensure we don't access invalid array indices
+		if (j > 0 && j < MAX_CLIENTS) {
 			_clients[j - 1] = _clients[j];
+		}
 	}
 	_nfds--;
 	
-	std::cout << "Client disconnected" << std::endl;
+	std::cout << "Client disconnected from slot " << client_index << std::endl;
 }
 
 void Server::parse_message(std::string message, Client& sender)
@@ -215,7 +273,11 @@ size_t Server::find_empty_slot()
 
 void Server::accept_new_clients()
 {
-	while (_pfds[0].revents & POLLIN)
+	// CRITICAL FIX: Limit the number of connections processed per iteration
+	int connections_processed = 0;
+	const int MAX_CONNECTIONS_PER_ITERATION = 5;
+	
+	while (_pfds[0].revents & POLLIN && connections_processed < MAX_CONNECTIONS_PER_ITERATION)
 	{
 		Client client;
 		client.addrlen = sizeof(client.addr);
@@ -229,7 +291,7 @@ void Server::accept_new_clients()
 			break;
 		}
 		
-		// CORRECTION: Change <= to < to prevent overflow
+		// IMPROVED: Better bounds checking
 		if (_nfds < MAX_CLIENTS)
 		{
 			size_t slot = find_empty_slot();
@@ -240,7 +302,12 @@ void Server::accept_new_clients()
 				client.pfdp = &(_pfds[slot]);
 				_clients[slot - 1] = client;
 				_nfds++;
-				std::cout << "Connection accepted: " << client.fd << " in slot " << slot << std::endl;
+				connections_processed++;
+				
+				// DEBUG: Check socket state after accept
+				int flags = fcntl(client.fd, F_GETFL, 0);
+				std::cout << "Connection accepted: " << client.fd << " in slot " << slot << " (nfds: " << _nfds << ")" << std::endl;
+				std::cout << "DEBUG: Socket flags: " << flags << " (O_NONBLOCK: " << O_NONBLOCK << ")" << std::endl;
 			}
 			else
 			{
@@ -250,7 +317,7 @@ void Server::accept_new_clients()
 		}
 		else
 		{
-			std::cout << "Connection refused. Server is full." << std::endl;
+			std::cout << "Connection refused. Server is full (nfds: " << _nfds << ")" << std::endl;
 			write(client.fd, "ERROR :Server full, try again later\r\n", 38);
 			close(client.fd);
 		}
@@ -258,4 +325,8 @@ void Server::accept_new_clients()
 	
 	// CRITICAL FIX: Reset the event flag to prevent infinite loop
 	_pfds[0].revents = 0;
+	
+	if (connections_processed > 0) {
+		std::cout << "Processed " << connections_processed << " new connections" << std::endl;
+	}
 }
