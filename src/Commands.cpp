@@ -21,8 +21,6 @@ int Commands::execute_command(const Message& msg, Client& sender)
 {
 	const std::string& command = msg.getCommand();
 	
-	std::cout << "Executing command: " << command << " from client " << sender.fd << std::endl;
-	
 	if (command == "CAP")
 		return cmd_cap(msg, sender);
 	else if (command == "PASS")
@@ -62,47 +60,37 @@ int Commands::execute_command(const Message& msg, Client& sender)
 	else if (command == "KILL")
 		return cmd_kill(msg, sender);
 	
-	// Unknown command
-	std::cout << "Unknown command: " << command << std::endl;
 	send_error(sender, 421, "Unknown command");
 	return -1;
 }
 
 int Commands::cmd_cap(const Message& msg, Client& sender)
 {
-	std::cout << "CAP command received with " << msg.getParamCount() << " parameters" << std::endl;
-	
 	if (msg.getParamCount() < 1) {
 		send_error(sender, 461, "CAP :Not enough parameters");
 		return -1;
 	}
 	
 	if (msg.getParams()[0] == "LS") {
-		std::cout << "Sending CAP * LS response" << std::endl;
-		write(sender.fd, "CAP * LS\r\n", 11);
+		std::string response = "CAP * LS :\r\n";
+		write(sender.fd, response.c_str(), response.length());
 	}
-	// Server will not support capability negotiation, so ignore other CAP messages
 	return 0;
 }
 
 int Commands::cmd_pass(const Message& msg, Client& sender)
 {
-	std::cout << "PASS command received with " << msg.getParamCount() << " parameters" << std::endl;
-	
 	if (msg.getParamCount() < 1) {
 		send_error(sender, 461, "PASS :Not enough parameters");
 		return -1;
 	}
 	
 	std::string password = msg.getParams()[0];
-	std::cout << "Password received: '" << password << "' vs expected: '" << _server->getPassword() << "'" << std::endl;
 	
 	if (password == _server->getPassword()) {
 		sender.password_is_valid = true;
-		std::cout << "Password accepted for client " << sender.fd << std::endl;
 		send_reply(sender, 001, "Password accepted");
 	} else {
-		std::cout << "Password incorrect for client " << sender.fd << std::endl;
 		send_error(sender, 464, "Password incorrect");
 		close(sender.fd);
 		return -1;
@@ -112,7 +100,6 @@ int Commands::cmd_pass(const Message& msg, Client& sender)
 
 int Commands::cmd_nick(const Message& msg, Client& sender)
 {
-	std::cout << "NICK command received with " << msg.getParamCount() << " parameters" << std::endl;
 	
 	if (msg.getParamCount() < 1) {
 		send_error(sender, 461, "NICK :Not enough parameters");
@@ -120,7 +107,6 @@ int Commands::cmd_nick(const Message& msg, Client& sender)
 	}
 	
 	std::string new_nick = msg.getParams()[0];
-	std::cout << "Setting nickname to: " << new_nick << " for client " << sender.fd << std::endl;
 	
 	// Check if nickname is valid
 	if (!is_nick_valid(new_nick)) {
@@ -139,7 +125,6 @@ int Commands::cmd_nick(const Message& msg, Client& sender)
 	
 	// Set the nickname
 	sender.setNick(new_nick);
-	std::cout << "Nickname set successfully to: " << new_nick << std::endl;
 	send_reply(sender, 001, "Welcome to the Internet Relay Network");
 	return 0;
 }
@@ -212,7 +197,6 @@ int Commands::cmd_error(const Message& msg, Client& sender)
 	(void)sender;
 	// ERROR command from client, usually indicates a problem
 	std::string reason = msg.getTrailing();
-	std::cout << "Client error: " << reason << std::endl;
 	return 0;
 }
 
@@ -374,14 +358,16 @@ bool Commands::is_channel_valid(const std::string& channel) const
 
 void Commands::send_error(Client& client, int error_code, const std::string& message) const
 {
+	std::string nick = client.nick.empty() ? "*" : client.nick;
 	std::string error_msg = ":" + std::string("ircserv") + " " + 
-		int_to_string(error_code) + " " + client.nick + " " + message + "\r\n";
+		int_to_string(error_code) + " " + nick + " " + message + "\r\n";
 	write(client.fd, error_msg.c_str(), error_msg.length());
 }
 
 void Commands::send_reply(Client& client, int reply_code, const std::string& message) const
 {
+	std::string nick = client.nick.empty() ? "*" : client.nick;
 	std::string reply_msg = ":" + std::string("ircserv") + " " + 
-		int_to_string(reply_code) + " " + client.nick + " " + message + "\r\n";
+		int_to_string(reply_code) + " " + nick + " " + message + "\r\n";
 	write(client.fd, reply_msg.c_str(), reply_msg.length());
 }

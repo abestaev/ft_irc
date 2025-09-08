@@ -1,6 +1,0 @@
-/connect localhost 6667 testpass
-/nick jsommet
-/msg nickserv identify testpass
-/join #test
-/msg #test Hello World!
-/quit
