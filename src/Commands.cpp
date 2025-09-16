@@ -20,6 +20,14 @@ Commands::~Commands() {}
 int Commands::execute_command(const Message& msg, Client& sender)
 {
 	const std::string& command = msg.getCommand();
+	// Gate non-registered clients: allow only limited commands before full registration
+	if (!sender.is_fully_registered) {
+		if (command != "PASS" && command != "NICK" && command != "USER" &&
+			command != "CAP" && command != "QUIT" && command != "PING") {
+			send_error(sender, 451, ":You have not registered");
+			return -1;
+		}
+	}
 	
 	if (command == "CAP")
 		return cmd_cap(msg, sender);
@@ -64,6 +72,14 @@ int Commands::execute_command(const Message& msg, Client& sender)
 	return -1;
 }
 
+static void maybe_complete_registration(Client &sender, Commands *self)
+{
+	if (sender.isRegistered() && !sender.is_fully_registered) {
+		sender.is_fully_registered = true;
+		self->send_reply(sender, 001, "Welcome to the Internet Relay Network");
+	}
+}
+
 int Commands::cmd_cap(const Message& msg, Client& sender)
 {
 	if (msg.getParamCount() < 1) {
@@ -90,6 +106,7 @@ int Commands::cmd_pass(const Message& msg, Client& sender)
 	if (password == _server->getPassword()) {
 		sender.password_is_valid = true;
 		send_reply(sender, 001, "Password accepted");
+		maybe_complete_registration(sender, this);
 	} else {
 		send_error(sender, 464, "Password incorrect");
 		close(sender.fd);
@@ -125,7 +142,7 @@ int Commands::cmd_nick(const Message& msg, Client& sender)
 	
 	// Set the nickname
 	sender.setNick(new_nick);
-	send_reply(sender, 001, "Welcome to the Internet Relay Network");
+	maybe_complete_registration(sender, this);
 	return 0;
 }
 
@@ -144,7 +161,7 @@ int Commands::cmd_user(const Message& msg, Client& sender)
 	}
 	
 	sender.setUser(username, realname);
-	send_reply(sender, 001, "Welcome to the Internet Relay Network");
+	maybe_complete_registration(sender, this);
 	return 0;
 }
 
@@ -156,7 +173,8 @@ int Commands::cmd_ping(const Message& msg, Client& sender)
 	}
 	
 	std::string token = msg.getParams()[0];
-	write(sender.fd, ("PONG :" + token + "\r\n").c_str(), token.length() + 8);
+	std::string response = "PONG :" + token + "\r\n";
+	write(sender.fd, response.c_str(), response.length());
 	return 0;
 }
 
@@ -187,7 +205,8 @@ int Commands::cmd_quit(const Message& msg, Client& sender)
 		reason = "Client Quit";
 	}
 	
-	write(sender.fd, ("ERROR :Closing Link: " + reason + "\r\n").c_str(), reason.length() + 25);
+	std::string response = "ERROR :Closing Link: " + reason + "\r\n";
+	write(sender.fd, response.c_str(), response.length());
 	close(sender.fd);
 	return -1;
 }
@@ -213,7 +232,8 @@ int Commands::cmd_join(const Message& msg, Client& sender)
 		return -1;
 	}
 	
-	// TODO: Implement channel joining logic
+	Channel* ch = _server->get_or_create_channel(channel_name);
+	ch->add_client(sender);
 	send_reply(sender, 332, channel_name + " :No topic is set");
 	return 0;
 }
@@ -224,8 +244,13 @@ int Commands::cmd_part(const Message& msg, Client& sender)
 		send_error(sender, 461, "PART :Not enough parameters");
 		return -1;
 	}
-	
-	// TODO: Implement channel leaving logic
+	std::string channel_name = msg.getParams()[0];
+	Channel* ch = _server->find_channel(channel_name);
+	if (!ch) {
+		send_error(sender, 403, channel_name + " :No such channel");
+		return -1;
+	}
+	ch->remove_client(sender);
 	return 0;
 }
 
@@ -235,8 +260,26 @@ int Commands::cmd_topic(const Message& msg, Client& sender)
 		send_error(sender, 461, "TOPIC :Not enough parameters");
 		return -1;
 	}
-	
-	// TODO: Implement topic setting logic
+	std::string channel_name = msg.getParams()[0];
+	Channel* ch = _server->find_channel(channel_name);
+	if (!ch) {
+		send_error(sender, 403, channel_name + " :No such channel");
+		return -1;
+	}
+	if (msg.hasTrailing()) {
+		std::string new_topic = msg.getTrailing();
+		ch->setTopic(new_topic);
+		std::string wire = ":" + (sender.nick.empty() ? std::string("*") : sender.nick) + " TOPIC " + channel_name + " :" + new_topic + "\r\n";
+		ch->broadcast(wire, -1);
+		send_reply(sender, 332, channel_name + " :" + new_topic);
+		return 0;
+	}
+	const std::string& topic = ch->getTopic();
+	if (topic.empty()) {
+		send_reply(sender, 331, channel_name + " :No topic is set");
+	} else {
+		send_reply(sender, 332, channel_name + " :" + topic);
+	}
 	return 0;
 }
 
@@ -250,9 +293,22 @@ int Commands::cmd_list(const Message& msg, Client& sender)
 
 int Commands::cmd_names(const Message& msg, Client& sender)
 {
-	(void)msg;
-	// TODO: Implement names listing
-	send_reply(sender, 366, "End of /NAMES list");
+	std::string channel_name;
+	if (msg.getParamCount() >= 1) channel_name = msg.getParams()[0];
+	if (!channel_name.empty()) {
+		Channel* ch = _server->find_channel(channel_name);
+		if (!ch) {
+			send_error(sender, 403, channel_name + " :No such channel");
+			return -1;
+		}
+		std::string names = ch->build_names_list();
+		// Minimal numeric replies: 353 (names) then 366 (end)
+		std::string r353 = ":ircserv 353 " + (sender.nick.empty() ? std::string("*") : sender.nick) + " = " + channel_name + " :" + names + "\r\n";
+		write(sender.fd, r353.c_str(), r353.length());
+		send_reply(sender, 366, channel_name + " :End of /NAMES list");
+	} else {
+		send_reply(sender, 366, ":End of /NAMES list");
+	}
 	return 0;
 }
 
@@ -301,7 +357,20 @@ int Commands::cmd_privmsg(const Message& msg, Client& sender)
 		return -1;
 	}
 	
-	// TODO: Implement private messaging logic
+	std::string target = msg.getParams()[0];
+	std::string text = msg.getTrailing();
+	if (!target.empty() && (target[0] == '#' || target[0] == '&' || target[0] == '!' || target[0] == '+')) {
+		Channel* ch = _server->find_channel(target);
+		if (!ch) {
+			send_error(sender, 401, target + " :No such nick/channel");
+			return -1;
+		}
+		std::string wire = ":" + (sender.nick.empty() ? std::string("*") : sender.nick) + " PRIVMSG " + target + " :" + text + "\r\n";
+		ch->broadcast(wire, sender.fd);
+		// Also echo back to sender to confirm send
+		write(sender.fd, wire.c_str(), wire.length());
+		return 0;
+	}
 	return 0;
 }
 

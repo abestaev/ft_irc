@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <signal.h>
+#include <vector>
 
 // Initialize static member
 bool Server::_sig = false;
@@ -57,6 +58,10 @@ void Server::init()
 	
 	int opt = 1;
 	setsockopt(_sockfd, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt));
+	// Make listening socket non-blocking
+	int lflags = fcntl(_sockfd, F_GETFL, 0);
+	if (lflags != -1)
+		fcntl(_sockfd, F_SETFL, lflags | O_NONBLOCK);
 	
 
 	_addr.sin_family = AF_INET;
@@ -70,7 +75,7 @@ void Server::init()
 	_pfds[0].fd = _sockfd;
 	_pfds[0].events = POLLIN;
 	
-	for (int i = 1; i < MAX_CLIENTS; i++)
+	for (int i = 1; i <= MAX_CLIENTS; i++)
 		_pfds[i].fd = -1;
 }
 
@@ -123,13 +128,29 @@ void Server::process_client_messages()
 			int bytes = read(_pfds[i].fd, buf, BUFFER_SIZE);
 			if (bytes <= 0)
 			{
-				handle_client_disconnect(i);
+				if (bytes < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+				{
+					// No data available on non-blocking socket
+				}
+				else
+				{
+					handle_client_disconnect(i);
+					i--; // adjust index since we shifted arrays
+				}
 			} 
 			else 
 			{
+				if (bytes >= BUFFER_SIZE)
+					bytes = BUFFER_SIZE - 1;
 				buf[bytes] = '\0';
 				if (i - 1 < MAX_CLIENTS) {
-					parse_message(std::string(buf), _clients[i - 1]);
+					_clients[i - 1].inbuf.append(buf);
+					std::string::size_type pos;
+					while ((pos = _clients[i - 1].inbuf.find("\r\n")) != std::string::npos) {
+						std::string line = _clients[i - 1].inbuf.substr(0, pos + 2);
+						_clients[i - 1].inbuf.erase(0, pos + 2);
+						parse_message(line, _clients[i - 1]);
+					}
 				}
 			}
 		}
@@ -192,10 +213,28 @@ void Server::handle_command(const Message& msg, Client& sender)
 {
 	_commands->execute_command(msg, sender);
 }
+Channel* Server::find_channel(const std::string& name)
+{
+	for (size_t i = 0; i < _channels.size(); ++i)
+	{
+		if (_channels[i].getName() == name)
+			return &(_channels[i]);
+	}
+	return NULL;
+}
+
+Channel* Server::get_or_create_channel(const std::string& name)
+{
+	Channel* ch = find_channel(name);
+	if (ch)
+		return ch;
+	_channels.push_back(Channel(name));
+	return &(_channels.back());
+}
 
 size_t Server::find_empty_slot()
 {
-	for (size_t i = 1; i < MAX_CLIENTS; i++)
+	for (size_t i = 1; i <= MAX_CLIENTS; i++)
 	{
 		if (_pfds[i].fd == -1)
 			return i;
@@ -219,14 +258,15 @@ void Server::accept_new_clients()
 			perror("accept error");
 			break;
 		}
+		// accepted new connection
 		
 		int flags = fcntl(client.fd, F_GETFL, 0);
 		fcntl(client.fd, F_SETFL, flags | O_NONBLOCK);
 		
-		if (_nfds < MAX_CLIENTS)
+		if ((_nfds - 1) < MAX_CLIENTS)
 		{
 			size_t slot = find_empty_slot();
-			if (slot > 0 && slot < MAX_CLIENTS)
+			if (slot > 0 && slot <= MAX_CLIENTS)
 			{
 				_pfds[slot].fd = client.fd;
 				_pfds[slot].events = POLLIN;
@@ -234,7 +274,7 @@ void Server::accept_new_clients()
 				_clients[slot - 1] = client;
 				_nfds++;
 				connections_processed++;
-				
+				// client assigned to slot
 			}
 			else
 			{

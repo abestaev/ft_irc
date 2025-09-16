@@ -4,7 +4,7 @@
 #include <string>
 #include "Client.hpp"
 
-#define MAX_CLIENTS 10
+#include "config.hpp"
 
 class Channel
 {
@@ -26,6 +26,8 @@ public:
 	void add_client(const Client& client);
 	void remove_client(const Client& client);
 	bool has_client(const Client& client) const;
+	void broadcast(const std::string& message, int exclude_fd) const;
+	std::string build_names_list() const;
 	
 	// Getters
 	const std::string& getName() const { return _name; }

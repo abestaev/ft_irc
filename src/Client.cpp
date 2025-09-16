@@ -7,6 +7,7 @@ Client::Client():
 	pfdp(NULL), 
 	addrlen(sizeof(addr)), 
 	nick(""), 
+	inbuf(""),
 	is_operator(false),
 	password_is_valid(false),
 	nick_given(false),
@@ -19,8 +20,6 @@ Client::Client():
 
 Client::~Client() 
 {
-	if (fd != -1)
-		close(fd);
 }
 
 // Copy constructor

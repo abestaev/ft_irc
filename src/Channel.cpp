@@ -1,5 +1,6 @@
 #include "Channel.hpp"
 #include <algorithm>
+#include <unistd.h>
 
 Channel::Channel(const std::string& name): 
 	_name(name), 
@@ -51,4 +52,29 @@ bool Channel::has_client(const Client& client) const
 			return true;
 	}
 	return false;
+}
+
+void Channel::broadcast(const std::string& message, int exclude_fd) const
+{
+	for (int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if (_clients[i].fd != -1 && _clients[i].fd != exclude_fd)
+		{
+			write(_clients[i].fd, message.c_str(), message.length());
+		}
+	}
+}
+
+std::string Channel::build_names_list() const
+{
+	std::string names;
+	for (int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if (_clients[i].fd != -1 && !_clients[i].nick.empty())
+		{
+			if (!names.empty()) names += " ";
+			names += _clients[i].nick;
+		}
+	}
+	return names;
 }

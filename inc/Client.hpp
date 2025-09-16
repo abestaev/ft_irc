@@ -16,6 +16,7 @@ public:
 	std::string username;
 	std::string realname;
 	std::string hostname;
+	std::string inbuf;
 	bool is_operator;
 	
 	// Registration requirements

@@ -27,10 +27,7 @@
 #include "Channel.hpp"
 #include "Commands.hpp"
 
-// Constants
-#define DEFAULT_PORT 6667
-#define MAX_CLIENTS 10
-#define BUFFER_SIZE 1024
+#include "config.hpp"
 
 // Global functions
 void error(std::string msg);

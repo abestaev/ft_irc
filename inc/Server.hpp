@@ -7,9 +7,10 @@
 #include "Client.hpp"
 #include "Message.hpp"
 #include "Commands.hpp"
+#include "Channel.hpp"
+#include <vector>
 
-#define MAX_CLIENTS 10
-#define BUFFER_SIZE 1024
+#include "config.hpp"
 
 class Server
 {
@@ -23,6 +24,7 @@ private:
 	int _nfds;
 	struct pollfd _pfds[MAX_CLIENTS + 1];
 	Commands* _commands;
+	std::vector<Channel> _channels;
 	
 	void accept_new_clients();
 	size_t find_empty_slot();
@@ -49,6 +51,10 @@ public:
 	const std::string& getPassword() const { return _pass; }
 	Client* getClients() { return _clients; }
 	int getMaxClients() const { return MAX_CLIENTS; }
+
+	// Channel management
+	Channel* find_channel(const std::string& name);
+	Channel* get_or_create_channel(const std::string& name);
 	
 	// Signal handling
 	static bool should_stop() { return _sig; }
