@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <algorithm>
 #include <sstream>
+#include <ctime>
 
 // Utility function for C++98 compatibility
 std::string int_to_string(int value)
@@ -76,7 +77,25 @@ static void maybe_complete_registration(Client &sender, Commands *self)
 {
 	if (sender.isRegistered() && !sender.is_fully_registered) {
 		sender.is_fully_registered = true;
-		self->send_reply(sender, 001, "Welcome to the Internet Relay Network");
+        // Minimal but friendlier registration burst for better client compatibility
+        self->send_reply(sender, 001, "Welcome to the Internet Relay Network");
+        self->send_reply(sender, 002, "Your host is ircserv, running version 1.0");
+        {
+            char timebuf[64];
+            std::time_t now = std::time(NULL);
+            std::tm *ptm = std::localtime(&now);
+            if (ptm) {
+                std::strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S %Z", ptm);
+                self->send_reply(sender, 003, std::string("This server was created ") + timebuf);
+            } else {
+                self->send_reply(sender, 003, std::string("This server was created epoch=") + int_to_string((int)now));
+            }
+        }
+        self->send_reply(sender, 004, "ircserv 1.0 o o");
+        // Minimal MOTD
+        self->send_reply(sender, 375, ":ircserv Message of the day");
+        self->send_reply(sender, 372, ":- Welcome to ft_irc");
+        self->send_reply(sender, 376, ":End of /MOTD command");
 	}
 }
 
@@ -87,10 +106,20 @@ int Commands::cmd_cap(const Message& msg, Client& sender)
 		return -1;
 	}
 	
-	if (msg.getParams()[0] == "LS") {
-		std::string response = "CAP * LS :\r\n";
-		write(sender.fd, response.c_str(), response.length());
-	}
+    if (msg.getParams()[0] == "LS") {
+        std::string response = "CAP * LS :\r\n"; // no capabilities advertised
+        write(sender.fd, response.c_str(), response.length());
+    } else if (msg.getParams()[0] == "LIST") {
+        std::string response = "CAP * LIST :\r\n";
+        write(sender.fd, response.c_str(), response.length());
+    } else if (msg.getParams()[0] == "REQ") {
+        // NAK all requested capabilities for now
+        std::string requested = msg.hasTrailing() ? msg.getTrailing() : (msg.getParamCount() >= 2 ? msg.getParams()[1] : "");
+        std::string response = "CAP * NAK :" + requested + "\r\n";
+        write(sender.fd, response.c_str(), response.length());
+    } else if (msg.getParams()[0] == "END") {
+        // Nothing to do; registration completes when PASS/NICK/USER done
+    }
 	return 0;
 }
 
@@ -105,7 +134,6 @@ int Commands::cmd_pass(const Message& msg, Client& sender)
 	
 	if (password == _server->getPassword()) {
 		sender.password_is_valid = true;
-		send_reply(sender, 001, "Password accepted");
 		maybe_complete_registration(sender, this);
 	} else {
 		send_error(sender, 464, "Password incorrect");
@@ -388,7 +416,8 @@ int Commands::cmd_kill(const Message& msg, Client& sender)
 // Utility methods
 bool Commands::is_nick_valid(const std::string& nick) const
 {
-	if (nick.empty() || nick.length() > 9)
+    // Allow longer nicks for modern clients like irssi
+    if (nick.empty() || nick.length() > 30)
 		return false;
 	
 	// Nickname must start with a letter or special character
