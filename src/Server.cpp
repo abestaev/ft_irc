@@ -255,6 +255,10 @@ void Server::accept_new_clients()
 		client.fd = accept(_sockfd, (struct sockaddr *)&client.addr, &client.addrlen);
 		if (client.fd < 0)
 		{
+			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+				// No more queued connections on non-blocking socket
+				break;
+			}
 			perror("accept error");
 			break;
 		}
