@@ -173,6 +173,21 @@ int Commands::cmd_nick(const Message& msg, Client& sender)
 		}
 	}
 	
+	// Broadcast change to channels
+	std::string old_nick = sender.nick;
+	if (!old_nick.empty() && old_nick != new_nick) {
+		std::string prefix = old_nick;
+		if (!sender.username.empty() && !sender.hostname.empty())
+			prefix += "!" + sender.username + "@" + sender.hostname;
+		std::string wire = ":" + prefix + " NICK :" + new_nick + "\r\n";
+		std::vector<Channel>& chans = _server->getChannels();
+		for (size_t i = 0; i < chans.size(); ++i) {
+			if (chans[i].has_client(sender)) {
+				chans[i].broadcast(wire, sender.fd);
+			}
+		}
+	}
+	
 	// Set the nickname
 	sender.setNick(new_nick);
 	maybe_complete_registration(sender, this);
@@ -238,6 +253,19 @@ int Commands::cmd_quit(const Message& msg, Client& sender)
 		reason = "Client Quit";
 	}
 	
+	// Broadcast QUIT to all channels
+	std::string prefix = sender.nick;
+	if (!sender.username.empty() && !sender.hostname.empty())
+		prefix += "!" + sender.username + "@" + sender.hostname;
+	std::string wire = ":" + prefix + " QUIT :" + reason + "\r\n";
+	std::vector<Channel>& chans = _server->getChannels();
+	for (size_t i = 0; i < chans.size(); ++i) {
+		if (chans[i].has_client(sender)) {
+			chans[i].broadcast(wire, sender.fd);
+			chans[i].remove_client(sender);
+		}
+	}
+	
 	std::string response = "ERROR :Closing Link: " + reason + "\r\n";
 	write(sender.fd, response.c_str(), response.length());
 	close(sender.fd);
@@ -264,9 +292,27 @@ int Commands::cmd_join(const Message& msg, Client& sender)
 		send_error(sender, 403, channel_name + " :Invalid channel name");
 		return -1;
 	}
-	
-	Channel* ch = _server->get_or_create_channel(channel_name);
+    // Optional key as second parameter
+    std::string provided_key;
+    if (msg.getParamCount() >= 2) {
+        provided_key = msg.getParams()[1];
+    }
+    Channel* ch = _server->get_or_create_channel(channel_name);
+    // Enforce modes: +l, +i, +k
+    if (ch->getUserLimit() > 0 && ch->get_user_count() >= ch->getUserLimit()) {
+        send_error(sender, 471, channel_name + " :Cannot join channel (+l)");
+        return -1;
+    }
+    if (ch->isInviteOnly() && !ch->isNickInvited(sender.nick)) {
+        send_error(sender, 473, channel_name + " :Cannot join channel (+i)");
+        return -1;
+    }
+    if (ch->hasKey() && ch->getKey() != provided_key) {
+        send_error(sender, 475, channel_name + " :Cannot join channel (+k)");
+        return -1;
+    }
     ch->add_client(sender);
+    if (ch->isNickInvited(sender.nick)) ch->removeNickInvite(sender.nick);
     // Broadcast JOIN
     std::string prefix = sender.nick;
     if (!sender.username.empty() && !sender.hostname.empty())
@@ -328,9 +374,13 @@ int Commands::cmd_topic(const Message& msg, Client& sender)
 		send_error(sender, 403, channel_name + " :No such channel");
 		return -1;
 	}
-	if (msg.hasTrailing()) {
+    if (msg.hasTrailing()) {
 		std::string new_topic = msg.getTrailing();
-		ch->setTopic(new_topic);
+        if (ch->isTopicRestricted() && !ch->isOperator(sender)) {
+            send_error(sender, 482, channel_name + " :You're not channel operator");
+            return -1;
+        }
+        ch->setTopic(new_topic);
 		std::string wire = ":" + (sender.nick.empty() ? std::string("*") : sender.nick) + " TOPIC " + channel_name + " :" + new_topic + "\r\n";
 		ch->broadcast(wire, -1);
 		send_reply(sender, 332, channel_name + " :" + new_topic);
@@ -347,9 +397,20 @@ int Commands::cmd_topic(const Message& msg, Client& sender)
 
 int Commands::cmd_list(const Message& msg, Client& sender)
 {
-	(void)msg;
-	// TODO: Implement channel listing
-	send_reply(sender, 322, "End of /LIST");
+    (void)msg;
+    // 321 header
+    {
+        std::string line = ":ircserv 321 " + (sender.nick.empty() ? std::string("*") : sender.nick) + " Channel :Users Name\r\n";
+        write(sender.fd, line.c_str(), line.length());
+    }
+    std::vector<Channel>& chans = _server->getChannels();
+    for (size_t i = 0; i < chans.size(); ++i) {
+        Channel &c = chans[i];
+        std::string line = ":ircserv 322 " + (sender.nick.empty() ? std::string("*") : sender.nick) + " " + c.getName() + " " + int_to_string(c.get_user_count()) + " :" + c.getTopic() + "\r\n";
+        write(sender.fd, line.c_str(), line.length());
+    }
+    // 323 end
+    send_reply(sender, 323, ":End of /LIST");
 	return 0;
 }
 
@@ -380,9 +441,33 @@ int Commands::cmd_invite(const Message& msg, Client& sender)
 		send_error(sender, 461, "INVITE :Not enough parameters");
 		return -1;
 	}
-	
-	// TODO: Implement invite logic
-	return 0;
+    std::string nick = msg.getParams()[0];
+    std::string channel_name = msg.getParams()[1];
+    Channel* ch = _server->find_channel(channel_name);
+    if (!ch) { send_error(sender, 403, channel_name + " :No such channel"); return -1; }
+    if (!ch->isOperator(sender)) { send_error(sender, 482, channel_name + " :You're not channel operator"); return -1; }
+    Client* clients = _server->getClients();
+    Client target;
+    bool found = false;
+    for (int i = 0; i < _server->getMaxClients(); i++) {
+        if (clients[i].fd != -1 && clients[i].nick == nick) { target = clients[i]; found = true; break; }
+    }
+    if (!found) { send_error(sender, 401, nick + " :No such nick/channel"); return -1; }
+    ch->inviteNick(nick);
+    // 341 RPL_INVITING
+    {
+        std::string r341 = ":ircserv 341 " + (sender.nick.empty() ? std::string("*") : sender.nick) + " " + nick + " " + channel_name + "\r\n";
+        write(sender.fd, r341.c_str(), r341.length());
+    }
+    // Notify target
+    {
+        std::string prefix = sender.nick;
+        if (!sender.username.empty() && !sender.hostname.empty())
+            prefix += "!" + sender.username + "@" + sender.hostname;
+        std::string wire = ":" + prefix + " INVITE " + nick + " :" + channel_name + "\r\n";
+        write(target.fd, wire.c_str(), wire.length());
+    }
+    return 0;
 }
 
 int Commands::cmd_kick(const Message& msg, Client& sender)
@@ -391,9 +476,28 @@ int Commands::cmd_kick(const Message& msg, Client& sender)
 		send_error(sender, 461, "KICK :Not enough parameters");
 		return -1;
 	}
-	
-	// TODO: Implement kick logic
-	return 0;
+    std::string channel_name = msg.getParams()[0];
+    std::string nick = msg.getParams()[1];
+    Channel* ch = _server->find_channel(channel_name);
+    if (!ch) { send_error(sender, 403, channel_name + " :No such channel"); return -1; }
+    if (!ch->isOperator(sender)) { send_error(sender, 482, channel_name + " :You're not channel operator"); return -1; }
+    Client* clients = _server->getClients();
+    Client target;
+    bool found = false;
+    for (int i = 0; i < _server->getMaxClients(); i++) {
+        if (clients[i].fd != -1 && clients[i].nick == nick) { target = clients[i]; found = true; break; }
+    }
+    if (!found || !ch->has_client(target)) { send_error(sender, 441, nick + " " + channel_name + " :They aren't on that channel"); return -1; }
+    std::string reason = msg.getTrailing();
+    std::string prefix = sender.nick;
+    if (!sender.username.empty() && !sender.hostname.empty())
+        prefix += "!" + sender.username + "@" + sender.hostname;
+    std::string wire = ":" + prefix + " KICK " + channel_name + " " + nick;
+    if (!reason.empty()) wire += " :" + reason;
+    wire += "\r\n";
+    ch->broadcast(wire, -1);
+    ch->remove_client(target);
+    return 0;
 }
 
 int Commands::cmd_mode(const Message& msg, Client& sender)
@@ -402,9 +506,80 @@ int Commands::cmd_mode(const Message& msg, Client& sender)
 		send_error(sender, 461, "MODE :Not enough parameters");
 		return -1;
 	}
-	
-	// TODO: Implement mode logic
-	return 0;
+    std::string target = msg.getParams()[0];
+    if (!target.empty() && (target[0] == '#' || target[0] == '&' || target[0] == '!' || target[0] == '+')) {
+        Channel* ch = _server->find_channel(target);
+        if (!ch) { send_error(sender, 403, target + " :No such channel"); return -1; }
+
+        // Query current modes
+        if (msg.getParamCount() == 1) {
+            std::string modes = "+";
+            if (ch->isInviteOnly()) modes += "i";
+            if (ch->isTopicRestricted()) modes += "t";
+            if (ch->hasKey()) modes += "k";
+            if (ch->getUserLimit() > 0) modes += "l";
+            std::string reply = target + " " + modes;
+            if (ch->hasKey()) reply += " *";
+            if (ch->getUserLimit() > 0) reply += " " + int_to_string(ch->getUserLimit());
+            send_reply(sender, 324, reply);
+            return 0;
+        }
+
+        // Modify modes: require operator
+        if (!ch->isOperator(sender)) {
+            send_error(sender, 482, target + " :You're not channel operator");
+            return -1;
+        }
+        std::string modespec = msg.getParams()[1];
+        int paramIndex = 2;
+        bool adding = true;
+        for (size_t i = 0; i < modespec.size(); ++i) {
+            char m = modespec[i];
+            if (m == '+') { adding = true; continue; }
+            if (m == '-') { adding = false; continue; }
+            if (m == 'i') { ch->setInviteOnly(adding); continue; }
+            if (m == 't') { ch->setTopicRestricted(adding); continue; }
+            if (m == 'k') {
+                if (adding) {
+                    if ((size_t)paramIndex > msg.getParamCount()-1) { send_error(sender, 461, "MODE :Not enough parameters"); return -1; }
+                    ch->setKey(msg.getParams()[paramIndex++]);
+                } else {
+                    ch->clearKey();
+                }
+                continue;
+            }
+            if (m == 'l') {
+                if (adding) {
+                    if ((size_t)paramIndex > msg.getParamCount()-1) { send_error(sender, 461, "MODE :Not enough parameters"); return -1; }
+                    int lim = std::atoi(msg.getParams()[paramIndex++].c_str());
+                    if (lim < 0) lim = 0;
+                    ch->setUserLimit(lim);
+                } else {
+                    ch->setUserLimit(0);
+                }
+                continue;
+            }
+            if (m == 'o') {
+                if ((size_t)paramIndex > msg.getParamCount()-1) { send_error(sender, 461, "MODE :Not enough parameters"); return -1; }
+                std::string nick = msg.getParams()[paramIndex++];
+                Client* clients = _server->getClients();
+                Client targetClient;
+                bool found = false;
+                for (int ci = 0; ci < _server->getMaxClients(); ci++) {
+                    if (clients[ci].fd != -1 && clients[ci].nick == nick) { targetClient = clients[ci]; found = true; break; }
+                }
+                if (!found || !ch->has_client(targetClient)) { send_error(sender, 441, nick + " " + target + " :They aren't on that channel"); continue; }
+                ch->setOperator(targetClient, adding);
+                continue;
+            }
+            // Unknown mode
+            send_error(sender, 472, std::string(1, m) + " :is unknown mode char to me");
+        }
+        return 0;
+    }
+    // User MODE not supported
+    send_error(sender, 501, ":Unknown MODE target");
+    return -1;
 }
 
 int Commands::cmd_privmsg(const Message& msg, Client& sender)
@@ -429,8 +604,6 @@ int Commands::cmd_privmsg(const Message& msg, Client& sender)
 		}
 		std::string wire = ":" + (sender.nick.empty() ? std::string("*") : sender.nick) + " PRIVMSG " + target + " :" + text + "\r\n";
 		ch->broadcast(wire, sender.fd);
-		// Also echo back to sender to confirm send
-		write(sender.fd, wire.c_str(), wire.length());
 		return 0;
 	}
     // Deliver to a user nick

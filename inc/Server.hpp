@@ -55,6 +55,7 @@ public:
 	// Channel management
 	Channel* find_channel(const std::string& name);
 	Channel* get_or_create_channel(const std::string& name);
+	std::vector<Channel>& getChannels() { return _channels; }
 	
 	// Signal handling
 	static bool should_stop() { return _sig; }
