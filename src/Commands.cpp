@@ -66,6 +66,8 @@ int Commands::execute_command(const Message& msg, Client& sender)
 		return cmd_mode(msg, sender);
 	else if (command == "PRIVMSG")
 		return cmd_privmsg(msg, sender);
+	else if (command == "NOTICE")
+		return cmd_notice(msg, sender);
 	else if (command == "KILL")
 		return cmd_kill(msg, sender);
 	
@@ -78,7 +80,10 @@ static void maybe_complete_registration(Client &sender, Commands *self)
 	if (sender.isRegistered() && !sender.is_fully_registered) {
 		sender.is_fully_registered = true;
         // Minimal but friendlier registration burst for better client compatibility
-        self->send_reply(sender, 001, "Welcome to the Internet Relay Network");
+        std::string prefix = sender.nick;
+        if (!sender.username.empty() && !sender.hostname.empty())
+            prefix += "!" + sender.username + "@" + sender.hostname;
+        self->send_reply(sender, 001, "Welcome to the Internet Relay Network " + prefix);
         self->send_reply(sender, 002, "Your host is ircserv, running version 1.0");
         {
             char timebuf[64];
@@ -254,15 +259,31 @@ int Commands::cmd_join(const Message& msg, Client& sender)
 		return -1;
 	}
 	
-	std::string channel_name = msg.getParams()[0];
+    std::string channel_name = msg.getParams()[0];
 	if (!is_channel_valid(channel_name)) {
 		send_error(sender, 403, channel_name + " :Invalid channel name");
 		return -1;
 	}
 	
 	Channel* ch = _server->get_or_create_channel(channel_name);
-	ch->add_client(sender);
-	send_reply(sender, 332, channel_name + " :No topic is set");
+    ch->add_client(sender);
+    // Broadcast JOIN
+    std::string prefix = sender.nick;
+    if (!sender.username.empty() && !sender.hostname.empty())
+        prefix += "!" + sender.username + "@" + sender.hostname;
+    std::string joinWire = ":" + prefix + " JOIN " + channel_name + "\r\n";
+    ch->broadcast(joinWire, -1);
+    // Topic (332/331)
+    const std::string& topic = ch->getTopic();
+    if (topic.empty())
+        send_reply(sender, 331, channel_name + " :No topic is set");
+    else
+        send_reply(sender, 332, channel_name + " :" + topic);
+    // NAMES (353/366)
+    std::string names = ch->build_names_list();
+    std::string r353 = ":ircserv 353 " + (sender.nick.empty() ? std::string("*") : sender.nick) + " = " + channel_name + " :" + names + "\r\n";
+    write(sender.fd, r353.c_str(), r353.length());
+    send_reply(sender, 366, channel_name + " :End of /NAMES list");
 	return 0;
 }
 
@@ -278,7 +299,20 @@ int Commands::cmd_part(const Message& msg, Client& sender)
 		send_error(sender, 403, channel_name + " :No such channel");
 		return -1;
 	}
-	ch->remove_client(sender);
+    if (!ch->has_client(sender)) {
+        send_error(sender, 442, channel_name + " :You're not on that channel");
+        return -1;
+    }
+    // Broadcast PART
+    std::string reason = msg.getTrailing();
+    std::string prefix = sender.nick;
+    if (!sender.username.empty() && !sender.hostname.empty())
+        prefix += "!" + sender.username + "@" + sender.hostname;
+    std::string wire = ":" + prefix + " PART " + channel_name;
+    if (!reason.empty()) wire += " :" + reason;
+    wire += "\r\n";
+    ch->broadcast(wire, -1);
+    ch->remove_client(sender);
 	return 0;
 }
 
@@ -387,7 +421,7 @@ int Commands::cmd_privmsg(const Message& msg, Client& sender)
 	
 	std::string target = msg.getParams()[0];
 	std::string text = msg.getTrailing();
-	if (!target.empty() && (target[0] == '#' || target[0] == '&' || target[0] == '!' || target[0] == '+')) {
+    if (!target.empty() && (target[0] == '#' || target[0] == '&' || target[0] == '!' || target[0] == '+')) {
 		Channel* ch = _server->find_channel(target);
 		if (!ch) {
 			send_error(sender, 401, target + " :No such nick/channel");
@@ -399,7 +433,53 @@ int Commands::cmd_privmsg(const Message& msg, Client& sender)
 		write(sender.fd, wire.c_str(), wire.length());
 		return 0;
 	}
-	return 0;
+    // Deliver to a user nick
+    Client* clients = _server->getClients();
+    for (int i = 0; i < _server->getMaxClients(); i++) {
+        if (clients[i].fd != -1 && clients[i].nick == target) {
+            std::string wire = ":" + (sender.nick.empty() ? std::string("*") : sender.nick);
+            if (!sender.username.empty() && !sender.hostname.empty())
+                wire += "!" + sender.username + "@" + sender.hostname;
+            wire += " PRIVMSG " + target + " :" + text + "\r\n";
+            write(clients[i].fd, wire.c_str(), wire.length());
+            return 0;
+        }
+    }
+    send_error(sender, 401, target + " :No such nick/channel");
+    return -1;
+}
+
+int Commands::cmd_notice(const Message& msg, Client& sender)
+{
+    if (msg.getParamCount() < 1) {
+        return -1; // NOTICE ne renvoie pas d'erreurs
+    }
+    if (msg.getTrailing().empty()) {
+        return -1; // pas d'erreurs pour NOTICE
+    }
+    std::string target = msg.getParams()[0];
+    std::string text = msg.getTrailing();
+    if (!target.empty() && (target[0] == '#' || target[0] == '&' || target[0] == '!' || target[0] == '+')) {
+        Channel* ch = _server->find_channel(target);
+        if (!ch) {
+            return -1; // NOTICE: silencieux
+        }
+        std::string wire = ":" + (sender.nick.empty() ? std::string("*") : sender.nick) + " NOTICE " + target + " :" + text + "\r\n";
+        ch->broadcast(wire, sender.fd);
+        return 0;
+    }
+    Client* clients = _server->getClients();
+    for (int i = 0; i < _server->getMaxClients(); i++) {
+        if (clients[i].fd != -1 && clients[i].nick == target) {
+            std::string wire = ":" + (sender.nick.empty() ? std::string("*") : sender.nick);
+            if (!sender.username.empty() && !sender.hostname.empty())
+                wire += "!" + sender.username + "@" + sender.hostname;
+            wire += " NOTICE " + target + " :" + text + "\r\n";
+            write(clients[i].fd, wire.c_str(), wire.length());
+            return 0;
+        }
+    }
+    return 0; // silencieux
 }
 
 int Commands::cmd_kill(const Message& msg, Client& sender)

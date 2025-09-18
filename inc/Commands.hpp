@@ -38,6 +38,7 @@ public:
 	int cmd_kick(const Message& msg, Client& sender);
 	int cmd_mode(const Message& msg, Client& sender);
 	int cmd_privmsg(const Message& msg, Client& sender);
+	int cmd_notice(const Message& msg, Client& sender);
 	int cmd_kill(const Message& msg, Client& sender);
 
 	// Utility methods

@@ -262,6 +262,13 @@ void Server::accept_new_clients()
 		
 		int flags = fcntl(client.fd, F_GETFL, 0);
 		fcntl(client.fd, F_SETFL, flags | O_NONBLOCK);
+
+		// Fill hostname field for client (IPv4)
+		char hostbuf[INET_ADDRSTRLEN];
+		const char *hp = inet_ntop(AF_INET, &client.addr.sin_addr, hostbuf, sizeof(hostbuf));
+		if (hp) {
+			client.hostname = std::string(hostbuf);
+		}
 		
 		if ((_nfds - 1) < MAX_CLIENTS)
 		{
