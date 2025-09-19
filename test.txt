@@ -1,0 +1,34 @@
+Plan de test rapide (irssi)
+Connexion
+Lancez: ./ircserv 6667 <password>
+Dans irssi: /connect localhost 6667 <password>
+Attendu: 001–004 + MOTD, plus de “Broken pipe”.
+Channels de base
+/join #test
+/msg #test hello (visible par les autres clients)
+/notice #test hi et /notice <nick> hi (NOTICE silencieux si cible absente)
+/names #test
+/list (321/322/323)
+Topic et mode +t
+/topic #test Nouveau topic
+/mode #test +t
+Un non‑op essaye /topic → 482 attendu
+Modes +i/+k/+l/+o et affichage
+/mode #test +k secret
+/mode #test +l 2
+/mode #test +i
+/mode #test +o <nick>
+/mode #test → 324 avec modes et paramètres
+Règles JOIN (+i/+k/+l)
+Depuis un 2e client:
+Mauvaise clé → 475
+Channel plein (limite atteinte) → 471
+Invite-only sans invite → 473
+INVITE: depuis un op /invite <nick> #test → le 2e client peut /join #test
+KICK
+Op: /kick #test <nick> :bye → diffusion KICK et retrait du membre
+NICK/QUIT
+/nick nouveau → les autres voient NICK
+/quit :bye → les autres voient QUIT, l’utilisateur est retiré du channel
+Mot de passe incorrect
+Connexion avec mauvais <password> → 464 puis fermeture

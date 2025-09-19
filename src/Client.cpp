@@ -1,6 +1,5 @@
 #include "Client.hpp"
 #include <cstring>
-#include <unistd.h>
 
 Client::Client(): 
 	fd(-1), 

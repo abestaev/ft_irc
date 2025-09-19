@@ -1,5 +1,4 @@
 #include "Channel.hpp"
-#include <algorithm>
 #include <unistd.h>
 
 Channel::Channel(const std::string& name): 

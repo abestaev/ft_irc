@@ -1,15 +1,13 @@
 #include "Server.hpp"
 #include "ft_irc.hpp"
-#include <iostream>
 #include <unistd.h>
 #include <cstring>
 #include <fcntl.h>
 #include <cerrno>
 #include <arpa/inet.h>
-#include <cstdlib>
 #include <cstdio>
 #include <signal.h>
-#include <vector>
+#include <ctime>
 
 // Initialize static member
 bool Server::_sig = false;
@@ -24,6 +22,18 @@ Server::Server(int port, std::string pass): _port(port), _pass(pass), _sockfd(-1
 	
 	// Initialize commands handler
 	_commands = new Commands(this);
+
+	// Capture server creation time (human readable)
+	{
+		char timebuf[64];
+		time_t now = time(NULL);
+		struct tm *ptm = localtime(&now);
+		if (ptm)
+			strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S %Z", ptm);
+		else
+			snprintf(timebuf, sizeof(timebuf), "%ld", (long)now);
+		_createdAt = std::string(timebuf);
+	}
 	
 	// Setup signal handlers
 	setup_signal_handlers();

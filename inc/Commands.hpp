@@ -46,6 +46,9 @@ public:
 	bool is_channel_valid(const std::string& channel) const;
 	void send_error(Client& client, int error_code, const std::string& message) const;
 	void send_reply(Client& client, int reply_code, const std::string& message) const;
+
+    // Accessors needed by helpers
+    const std::string& getServerCreatedAt() const;
 };
 
 #endif

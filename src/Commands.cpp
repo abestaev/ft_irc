@@ -1,10 +1,9 @@
 #include "Commands.hpp"
 #include "Server.hpp"
-#include <iostream>
 #include <unistd.h>
-#include <algorithm>
 #include <sstream>
 #include <ctime>
+#include <cstdlib>
 
 // Utility function for C++98 compatibility
 std::string int_to_string(int value)
@@ -15,6 +14,7 @@ std::string int_to_string(int value)
 }
 
 Commands::Commands(Server* server) : _server(server) {}
+const std::string& Commands::getServerCreatedAt() const { return _server->getCreatedAt(); }
 
 Commands::~Commands() {}
 
@@ -86,15 +86,7 @@ static void maybe_complete_registration(Client &sender, Commands *self)
         self->send_reply(sender, 001, "Welcome to the Internet Relay Network " + prefix);
         self->send_reply(sender, 002, "Your host is ircserv, running version 1.0");
         {
-            char timebuf[64];
-            std::time_t now = std::time(NULL);
-            std::tm *ptm = std::localtime(&now);
-            if (ptm) {
-                std::strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S %Z", ptm);
-                self->send_reply(sender, 003, std::string("This server was created ") + timebuf);
-            } else {
-                self->send_reply(sender, 003, std::string("This server was created epoch=") + int_to_string((int)now));
-            }
+            self->send_reply(sender, 003, std::string("This server was created ") + self->getServerCreatedAt());
         }
         self->send_reply(sender, 004, "ircserv 1.0 o o");
         // Minimal MOTD
@@ -313,6 +305,11 @@ int Commands::cmd_join(const Message& msg, Client& sender)
     }
     ch->add_client(sender);
     if (ch->isNickInvited(sender.nick)) ch->removeNickInvite(sender.nick);
+    // If first user (now operator), announce +o so clients reflect status
+    if (ch->isOperator(sender)) {
+        std::string modeWire = ":ircserv MODE " + channel_name + " +o " + (sender.nick.empty() ? std::string("*") : sender.nick) + "\r\n";
+        ch->broadcast(modeWire, -1);
+    }
     // Broadcast JOIN
     std::string prefix = sender.nick;
     if (!sender.username.empty() && !sender.hostname.empty())
@@ -464,7 +461,8 @@ int Commands::cmd_invite(const Message& msg, Client& sender)
         std::string prefix = sender.nick;
         if (!sender.username.empty() && !sender.hostname.empty())
             prefix += "!" + sender.username + "@" + sender.hostname;
-        std::string wire = ":" + prefix + " INVITE " + nick + " :" + channel_name + "\r\n";
+        // Proper RFC format: INVITE <nick> <channel>
+        std::string wire = ":" + prefix + " INVITE " + nick + " " + channel_name + "\r\n";
         write(target.fd, wire.c_str(), wire.length());
     }
     return 0;
@@ -533,18 +531,30 @@ int Commands::cmd_mode(const Message& msg, Client& sender)
         std::string modespec = msg.getParams()[1];
         int paramIndex = 2;
         bool adding = true;
+        char lastSign = 0; // track for appliedSpec
+        std::string appliedSpec;
+        std::vector<std::string> appliedParams;
         for (size_t i = 0; i < modespec.size(); ++i) {
             char m = modespec[i];
             if (m == '+') { adding = true; continue; }
             if (m == '-') { adding = false; continue; }
-            if (m == 'i') { ch->setInviteOnly(adding); continue; }
-            if (m == 't') { ch->setTopicRestricted(adding); continue; }
+            // append sign if changed or at start
+            if ((adding ? '+' : '-') != lastSign) {
+                appliedSpec += (adding ? '+' : '-');
+                lastSign = (adding ? '+' : '-');
+            }
+            if (m == 'i') { ch->setInviteOnly(adding); appliedSpec += 'i'; continue; }
+            if (m == 't') { ch->setTopicRestricted(adding); appliedSpec += 't'; continue; }
             if (m == 'k') {
                 if (adding) {
                     if ((size_t)paramIndex > msg.getParamCount()-1) { send_error(sender, 461, "MODE :Not enough parameters"); return -1; }
-                    ch->setKey(msg.getParams()[paramIndex++]);
+                    std::string key = msg.getParams()[paramIndex++];
+                    ch->setKey(key);
+                    appliedSpec += 'k';
+                    appliedParams.push_back(key);
                 } else {
                     ch->clearKey();
+                    appliedSpec += 'k';
                 }
                 continue;
             }
@@ -554,8 +564,11 @@ int Commands::cmd_mode(const Message& msg, Client& sender)
                     int lim = std::atoi(msg.getParams()[paramIndex++].c_str());
                     if (lim < 0) lim = 0;
                     ch->setUserLimit(lim);
+                    appliedSpec += 'l';
+                    appliedParams.push_back(int_to_string(lim));
                 } else {
                     ch->setUserLimit(0);
+                    appliedSpec += 'l';
                 }
                 continue;
             }
@@ -570,16 +583,30 @@ int Commands::cmd_mode(const Message& msg, Client& sender)
                 }
                 if (!found || !ch->has_client(targetClient)) { send_error(sender, 441, nick + " " + target + " :They aren't on that channel"); continue; }
                 ch->setOperator(targetClient, adding);
+                appliedSpec += 'o';
+                appliedParams.push_back(nick);
                 continue;
             }
             // Unknown mode
             send_error(sender, 472, std::string(1, m) + " :is unknown mode char to me");
         }
+        // Broadcast applied mode changes if any
+        if (!appliedSpec.empty()) {
+            std::string prefix = sender.nick;
+            if (!sender.username.empty() && !sender.hostname.empty())
+                prefix += "!" + sender.username + "@" + sender.hostname;
+            std::string wire = ":" + prefix + " MODE " + target + " " + appliedSpec;
+            for (size_t pi = 0; pi < appliedParams.size(); ++pi) {
+                wire += " " + appliedParams[pi];
+            }
+            wire += "\r\n";
+            ch->broadcast(wire, -1);
+        }
         return 0;
     }
-    // User MODE not supported
-    send_error(sender, 501, ":Unknown MODE target");
-    return -1;
+    // User MODE: return current (minimal)
+    send_reply(sender, 221, "+");
+    return 0;
 }
 
 int Commands::cmd_privmsg(const Message& msg, Client& sender)

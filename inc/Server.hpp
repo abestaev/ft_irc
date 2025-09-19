@@ -25,6 +25,7 @@ private:
 	struct pollfd _pfds[MAX_CLIENTS + 1];
 	Commands* _commands;
 	std::vector<Channel> _channels;
+	std::string _createdAt;
 	
 	void accept_new_clients();
 	size_t find_empty_slot();
@@ -56,6 +57,7 @@ public:
 	Channel* find_channel(const std::string& name);
 	Channel* get_or_create_channel(const std::string& name);
 	std::vector<Channel>& getChannels() { return _channels; }
+	const std::string& getCreatedAt() const { return _createdAt; }
 	
 	// Signal handling
 	static bool should_stop() { return _sig; }
