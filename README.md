@@ -22,22 +22,19 @@ printf "PASS secret\r\nNICK alice\r\nUSER u 0 * :Real\r\nPING 42\r\n" | nc -v 12
 
 Expected: password ack, welcome, then `PONG :42`.
 
-## Supported commands (minimal)
-- PASS, NICK, USER: registration flow; welcome when complete
-- PING/PONG
-- JOIN <#chan>: create/join channel
-- PART <#chan>
-- NAMES <#chan>: lists nicks (basic)
-- PRIVMSG <#chan> :text: broadcast to channel (basic)
-- TOPIC <#chan> [ :topic ]: get/set topic
-- QUIT: close link
+## Supported commands
+- PASS, NICK, USER, CAP, PING/PONG, QUIT
+- Channels: JOIN, PART, TOPIC (+t), LIST, NAMES
+- Messaging: PRIVMSG, NOTICE (channel and user)
+- Moderation: INVITE, KICK, MODE (channel and user modes), OPER, KILL
 
 ## Notes
 - Non-blocking sockets with poll(2)
-- Per-client input buffering; messages parsed on CRLF
+- Per-client input buffering; messages parsed on CRLF (LF accepted)
 - Constants in `inc/config.hpp`
+- Basic numerics (001..), minimal MOTD
 
 ## Known limitations
-- No user-to-user PRIVMSG
-- No MODE/KICK/INVITE/OPER logic
-- Channel/user limits & modes are placeholders
+- Some RFC numerics (005, 251–255, LUSERS, etc.) are minimal or omitted
+- Channel mode enforcement is partial (e.g. +m moderated and +n external filtering may need refinement)
+- Capability negotiation (CAP) is minimal (no real capabilities)

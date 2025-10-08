@@ -10,72 +10,7 @@
 // Moved to utils.cpp
 std::string int_to_string(int value);
 
-Commands::Commands(Server* server) : _server(server) {}
-const std::string& Commands::getServerCreatedAt() const { return _server->getCreatedAt(); }
-
-Commands::~Commands() {}
-
-int Commands::execute_command(const Message& msg, Client& sender)
-{
-	const std::string& command = msg.getCommand();
-	// Gate non-registered clients: allow only limited commands before full registration
-	if (!sender.is_fully_registered) {
-		if (command != "PASS" && command != "NICK" && command != "USER" &&
-			command != "CAP" && command != "QUIT" && command != "PING") {
-			send_error(sender, 451, ":You have not registered");
-			return -1;
-		}
-	}
-	
-	if (command == "CAP")
-		return cmd_cap(msg, sender);
-	else if (command == "PASS")
-		return cmd_pass(msg, sender);
-	else if (command == "NICK")
-		return cmd_nick(msg, sender);
-	else if (command == "USER")
-		return cmd_user(msg, sender);
-	else if (command == "PING")
-		return cmd_ping(msg, sender);
-	else if (command == "PONG")
-		return cmd_pong(msg, sender);
-	else if (command == "OPER")
-		return cmd_oper(msg, sender);
-	else if (command == "QUIT")
-		return cmd_quit(msg, sender);
-	else if (command == "ERROR")
-		return cmd_error(msg, sender);
-	else if (command == "JOIN")
-		return cmd_join(msg, sender);
-	else if (command == "PART")
-		return cmd_part(msg, sender);
-	else if (command == "TOPIC")
-		return cmd_topic(msg, sender);
-	else if (command == "LIST")
-		return cmd_list(msg, sender);
-	else if (command == "NAMES")
-		return cmd_names(msg, sender);
-	else if (command == "INVITE")
-		return cmd_invite(msg, sender);
-	else if (command == "KICK")
-		return cmd_kick(msg, sender);
-	else if (command == "MODE")
-		return cmd_mode(msg, sender);
-	else if (command == "PRIVMSG")
-		return cmd_privmsg(msg, sender);
-	else if (command == "NOTICE")
-		return cmd_notice(msg, sender);
-	else if (command == "KILL")
-		return cmd_kill(msg, sender);
-	else if (command == "WHO")
-		return cmd_who(msg, sender);
-	else if (command == "WHOIS")
-		return cmd_whois(msg, sender);
-	
-	std::cout << "\033[31m[ERROR]\033[0m Unknown command: \"" << command << "\"" << std::endl;
-	send_error(sender, 421, "Unknown command");
-	return -1;
-}
+// moved to CommandsCore.cpp
 
 // Moved to CommandsCore.cpp
 static void maybe_complete_registration(Client &sender, Commands *self);
