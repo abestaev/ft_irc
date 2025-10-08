@@ -1,15 +1,9 @@
 #include "Commands.hpp"
 #include "Server.hpp"
-#include <sstream>
+#include "utils.hpp"
 #include <iostream>
 
-// Utility function for C++98 compatibility
-std::string int_to_string(int value)
-{
-    std::ostringstream oss;
-    oss << value;
-    return oss.str();
-}
+// int_to_string moved to utils.cpp / utils.hpp
 
 void Commands::maybe_complete_registration(Client& sender)
 {
