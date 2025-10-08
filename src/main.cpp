@@ -33,6 +33,10 @@ int	main(int ac, char **av)
 
 	try
 	{
+		// Display server startup information
+		std::cout << "\033[32m[INFO]\033[0m Starting IRC server on port " << portno << std::endl;
+		std::cout << "\033[32m[INFO]\033[0m Password required for connection: " << pass << std::endl;
+		
 		Server server(portno, pass);
 		server.init();
 		server.run();

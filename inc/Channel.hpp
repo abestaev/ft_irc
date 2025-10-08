@@ -20,6 +20,9 @@ private:
 	bool _invite_only;
 	bool _topic_restricted;
 	bool _moderated;
+	bool _secret;
+	bool _no_external_messages;
+	bool _channel_operator_topic;
     std::vector<std::string> _invited_nicks;
 
 public:
@@ -57,6 +60,14 @@ public:
     void inviteNick(const std::string& nick);
     bool isNickInvited(const std::string& nick) const;
     void removeNickInvite(const std::string& nick);
+    
+    // Additional channel modes
+    void setSecret(bool enabled) { _secret = enabled; }
+    bool isSecret() const { return _secret; }
+    void setNoExternalMessages(bool enabled) { _no_external_messages = enabled; }
+    bool isNoExternalMessages() const { return _no_external_messages; }
+    void setChannelOperatorTopic(bool enabled) { _channel_operator_topic = enabled; }
+    bool isChannelOperatorTopic() const { return _channel_operator_topic; }
 };
 
 #endif

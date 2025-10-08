@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <signal.h>
 #include <ctime>
+#include <netinet/tcp.h>
 
 // Initialize static member
 bool Server::_sig = false;
@@ -64,7 +65,10 @@ void Server::init()
 {
 	_sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (_sockfd < 0)
+	{
+		std::cout << "\033[31m[ERROR]\033[0m Failed to create socket: " << strerror(errno) << std::endl;
 		error("socket error");
+	}
 	
 	int opt = 1;
 	setsockopt(_sockfd, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt));
@@ -79,7 +83,10 @@ void Server::init()
 	_addr.sin_port = htons(_port);
 
 	if (bind(_sockfd, (struct sockaddr *) &_addr, sizeof(_addr)) < 0)
+	{
+		std::cout << "\033[31m[ERROR]\033[0m Failed to bind socket: " << strerror(errno) << std::endl;
 		error("bind error");
+	}
 
 	_nfds = 1;
 	_pfds[0].fd = _sockfd;
@@ -91,14 +98,18 @@ void Server::init()
 
 void Server::run()
 {
-	listen(_sockfd, SOMAXCONN);
-	std::cout << "Server is now listening on socket " << _sockfd << std::endl;
-	std::cout << "Address: " << inet_ntoa(_addr.sin_addr) << ":" << _port << std::endl;
+	if (listen(_sockfd, SOMAXCONN) < 0)
+	{
+		std::cout << "\033[31m[ERROR]\033[0m Failed to listen on socket: " << strerror(errno) << std::endl;
+		error("listen error");
+	}
+	
+	std::cout << "\033[32m[INFO]\033[0m Listening on " << inet_ntoa(_addr.sin_addr) << ":" << _port << std::endl;
 	std::cout << "Press Ctrl+C to stop the server" << std::endl;
 
 	while (!_sig)
 	{
-		int poll_result = poll(_pfds, _nfds, 1000);
+    int poll_result = poll(_pfds, _nfds, 100);
 		
 		if (poll_result < 0)
 		{
@@ -122,6 +133,7 @@ void Server::run()
 				process_client_messages();
 			}
 		}
+		
 	}
 	
 	std::cout << "Server shutting down..." << std::endl;
@@ -129,56 +141,116 @@ void Server::run()
 
 void Server::process_client_messages()
 {
-	char buf[BUFFER_SIZE];
-	
-	for (int i = 1; i < _nfds; i++)
-	{
-		if (_pfds[i].revents & POLLIN)
-		{
-			int bytes = read(_pfds[i].fd, buf, BUFFER_SIZE);
-			if (bytes <= 0)
-			{
-				if (bytes < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
-				{
-					// No data available on non-blocking socket
-				}
-				else
-				{
-					handle_client_disconnect(i);
-					i--; // adjust index since we shifted arrays
-				}
-			} 
-			else 
-			{
-				if (bytes >= BUFFER_SIZE)
-					bytes = BUFFER_SIZE - 1;
-				buf[bytes] = '\0';
-				if (i - 1 < MAX_CLIENTS) {
-					_clients[i - 1].inbuf.append(buf);
-					std::string::size_type pos;
-					while ((pos = _clients[i - 1].inbuf.find("\r\n")) != std::string::npos) {
-						std::string line = _clients[i - 1].inbuf.substr(0, pos + 2);
-						_clients[i - 1].inbuf.erase(0, pos + 2);
-						parse_message(line, _clients[i - 1]);
-					}
-				}
-			}
-		}
-		
-		if (_pfds[i].revents & POLLOUT)
-		{
-			_pfds[i].events &= ~POLLOUT;
-		}
-		
-		if (_pfds[i].revents & POLLERR)
-		{
-			handle_client_disconnect(i);
-		}
-		
-		if (_pfds[i].revents != 0) {
-			_pfds[i].revents = 0;
-		}
-	}
+    char buf[BUFFER_SIZE];
+    
+    for (int i = 1; i < _nfds; i++)
+    {
+        if (_pfds[i].revents & POLLIN)
+        {
+            bool disconnect = false;
+            while (true)
+            {
+                int bytes = read(_pfds[i].fd, buf, BUFFER_SIZE);
+                if (bytes > 0)
+                {
+                    if (i - 1 < MAX_CLIENTS) {
+                        _clients[i - 1].inbuf.append(buf, bytes);
+                        // Incrementally parse complete lines from buffer to avoid waiting for EAGAIN
+                        std::string &inbuf = _clients[i - 1].inbuf;
+                        while (true) {
+                            std::string::size_type posCRLF = inbuf.find("\r\n");
+                            if (posCRLF != std::string::npos) {
+                                std::string raw = inbuf.substr(0, posCRLF + 2);
+                                inbuf.erase(0, posCRLF + 2);
+                                parse_message(raw, _clients[i - 1]);
+                                continue;
+                            }
+                            std::string::size_type posLF = inbuf.find('\n');
+                            if (posLF != std::string::npos) {
+                                std::string line = inbuf.substr(0, posLF);
+                                if (!line.empty() && line[line.size() - 1] == '\r') {
+                                    line.erase(line.size() - 1);
+                                }
+                                std::string raw = line + "\r\n";
+                                inbuf.erase(0, posLF + 1);
+                                parse_message(raw, _clients[i - 1]);
+                                continue;
+                            }
+                            break;
+                        }
+                    }
+                    // continue draining until EAGAIN to keep latency low
+                    continue;
+                }
+                if (bytes == 0)
+                {
+                    // Peer closed connection
+                    disconnect = true;
+                    break;
+                }
+                if (bytes < 0)
+                {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                        // drained
+                        break;
+                    }
+                    std::cout << "\033[31m[ERROR]\033[0m Failed to read from socket fd:" << _pfds[i].fd 
+                              << " (" << strerror(errno) << ")" << std::endl;
+                    disconnect = true;
+                    break;
+                }
+            }
+            
+            if (disconnect)
+            {
+                handle_client_disconnect(i);
+                i--; // adjust index since we shifted arrays
+                continue;
+            }
+            
+            // Parse all complete lines from buffer. Accept both CRLF and bare LF.
+            if (i - 1 < MAX_CLIENTS) {
+                std::string &inbuf = _clients[i - 1].inbuf;
+                while (true) {
+                    std::string::size_type posCRLF = inbuf.find("\r\n");
+                    if (posCRLF != std::string::npos) {
+                        std::string raw = inbuf.substr(0, posCRLF + 2);
+                        inbuf.erase(0, posCRLF + 2);
+                        parse_message(raw, _clients[i - 1]);
+                        continue;
+                    }
+                    std::string::size_type posLF = inbuf.find('\n');
+                    if (posLF != std::string::npos) {
+                        std::string line = inbuf.substr(0, posLF);
+                        // strip optional preceding CR
+                        if (!line.empty() && line[line.size() - 1] == '\r') {
+                            line.erase(line.size() - 1);
+                        }
+                        // normalize to CRLF for parser
+                        std::string raw = line + "\r\n";
+                        inbuf.erase(0, posLF + 1);
+                        parse_message(raw, _clients[i - 1]);
+                        continue;
+                    }
+                    break;
+                }
+            }
+        }
+        
+        if (_pfds[i].revents & POLLOUT)
+        {
+            _pfds[i].events &= ~POLLOUT;
+        }
+        
+        if (_pfds[i].revents & POLLERR)
+        {
+            handle_client_disconnect(i);
+        }
+        
+        if (_pfds[i].revents != 0) {
+            _pfds[i].revents = 0;
+        }
+    }
 }
 
 void Server::handle_client_disconnect(int client_index)
@@ -187,6 +259,29 @@ void Server::handle_client_disconnect(int client_index)
 		return;
 	}
 	
+    // Preserve client before wiping to clean channels correctly
+    Client departing = _clients[client_index - 1];
+
+	// Log disconnection
+    std::string client_nick = _clients[client_index - 1].nick;
+	if (client_nick.empty()) {
+		client_nick = "unregistered";
+	}
+	std::cout << "\033[33m[DISCONNECT]\033[0m Client " << client_nick 
+			  << " (fd:" << _pfds[client_index].fd << ") disconnected" << std::endl;
+	
+    // Remove the client from all channels and delete empty channels
+    for (size_t i = 0; i < _channels.size(); ++i) {
+        if (_channels[i].has_client(departing)) {
+            _channels[i].remove_client(departing);
+            if (_channels[i].get_user_count() == 0) {
+                std::cout << "\033[33m[CHANNEL]\033[0m Deleted channel " << _channels[i].getName() << std::endl;
+                _channels.erase(_channels.begin() + i);
+                i--;
+            }
+        }
+    }
+
 	close(_pfds[client_index].fd);
 	_pfds[client_index].fd = -1;
 	_clients[client_index - 1] = Client();
@@ -221,6 +316,22 @@ Message Server::parse_irc_message(const std::string& raw_message)
 
 void Server::handle_command(const Message& msg, Client& sender)
 {
+	// Log the command received
+	std::string sender_nick = sender.nick.empty() ? "unregistered" : sender.nick;
+	std::cout << "\033[35m[CMD]\033[0m " << sender_nick << " -> " << msg.getCommand();
+	
+	// Add parameters if any
+	if (!msg.getParams().empty()) {
+		std::cout << " " << msg.getParams()[0];
+	}
+	
+	// Add trailing if any
+	if (msg.hasTrailing()) {
+		std::cout << " :" << msg.getTrailing();
+	}
+	
+	std::cout << std::endl;
+	
 	_commands->execute_command(msg, sender);
 }
 Channel* Server::find_channel(const std::string& name)
@@ -239,6 +350,8 @@ Channel* Server::get_or_create_channel(const std::string& name)
 	if (ch)
 		return ch;
 	_channels.push_back(Channel(name));
+    // Show state when a new channel is created
+    display_server_state();
 	return &(_channels.back());
 }
 
@@ -277,12 +390,21 @@ void Server::accept_new_clients()
 		int flags = fcntl(client.fd, F_GETFL, 0);
 		fcntl(client.fd, F_SETFL, flags | O_NONBLOCK);
 
+		// Enable TCP_NODELAY to reduce latency (disable Nagle)
+		int nodelay = 1;
+		setsockopt(client.fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
+
 		// Fill hostname field for client (IPv4)
 		char hostbuf[INET_ADDRSTRLEN];
 		const char *hp = inet_ntop(AF_INET, &client.addr.sin_addr, hostbuf, sizeof(hostbuf));
 		if (hp) {
 			client.hostname = std::string(hostbuf);
 		}
+		
+		// Get client port for logging
+		int client_port = ntohs(client.addr.sin_port);
+		std::cout << "\033[36m[CONNECT]\033[0m New client connected from " << client.hostname 
+				  << ":" << client_port << " (fd: " << client.fd << ")" << std::endl;
 		
 		if ((_nfds - 1) < MAX_CLIENTS)
 		{
@@ -296,6 +418,8 @@ void Server::accept_new_clients()
 				_nfds++;
 				connections_processed++;
 				// client assigned to slot
+                // Show state when a new client is accepted
+                display_server_state();
 			}
 			else
 			{
@@ -311,4 +435,19 @@ void Server::accept_new_clients()
 	
 	_pfds[0].revents = 0;
 	
+}
+
+void Server::display_server_state()
+{
+	int connected_clients = 0;
+	for (int i = 0; i < MAX_CLIENTS; i++) {
+		if (_clients[i].fd != -1) {
+			connected_clients++;
+		}
+	}
+	
+	int active_channels = _channels.size();
+	
+	std::cout << "\033[34m[STATE]\033[0m Connected clients: " << connected_clients << std::endl;
+	std::cout << "\033[34m[STATE]\033[0m Active channels: " << active_channels << std::endl;
 }

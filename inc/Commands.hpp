@@ -40,6 +40,8 @@ public:
 	int cmd_privmsg(const Message& msg, Client& sender);
 	int cmd_notice(const Message& msg, Client& sender);
 	int cmd_kill(const Message& msg, Client& sender);
+	int cmd_who(const Message& msg, Client& sender);
+	int cmd_whois(const Message& msg, Client& sender);
 
 	// Utility methods
 	bool is_nick_valid(const std::string& nick) const;

@@ -8,6 +8,11 @@ Client::Client():
 	nick(""), 
 	inbuf(""),
 	is_operator(false),
+	is_invisible(false),
+	is_wallops(false),
+	is_restricted(false),
+	is_global_operator(false),
+	is_local_operator(false),
 	password_is_valid(false),
 	nick_given(false),
 	user_given(false),
@@ -33,6 +38,11 @@ Client::Client(const Client& other)
 	realname = other.realname;
 	hostname = other.hostname;
 	is_operator = other.is_operator;
+	is_invisible = other.is_invisible;
+	is_wallops = other.is_wallops;
+	is_restricted = other.is_restricted;
+	is_global_operator = other.is_global_operator;
+	is_local_operator = other.is_local_operator;
 	password_is_valid = other.password_is_valid;
 	nick_given = other.nick_given;
 	user_given = other.user_given;
@@ -53,6 +63,11 @@ Client& Client::operator=(const Client& other)
 		realname = other.realname;
 		hostname = other.hostname;
 		is_operator = other.is_operator;
+		is_invisible = other.is_invisible;
+		is_wallops = other.is_wallops;
+		is_restricted = other.is_restricted;
+		is_global_operator = other.is_global_operator;
+		is_local_operator = other.is_local_operator;
 		password_is_valid = other.password_is_valid;
 		nick_given = other.nick_given;
 		user_given = other.user_given;
@@ -78,4 +93,15 @@ void Client::setUser(const std::string& new_username, const std::string& new_rea
 bool Client::isRegistered() const
 {
 	return password_is_valid && nick_given && user_given;
+}
+
+std::string Client::getUserModes() const
+{
+	std::string modes = "+";
+	if (is_invisible) modes += "i";
+	if (is_wallops) modes += "w";
+	if (is_restricted) modes += "r";
+	if (is_global_operator) modes += "o";
+	if (is_local_operator) modes += "O";
+	return modes;
 }

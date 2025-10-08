@@ -37,9 +37,9 @@ private:
 	Message parse_irc_message(const std::string& raw_message);
 	void handle_command(const Message& msg, Client& sender);
 	
-	// Signal handling
-	static void signal_handler(int sig);
-	void setup_signal_handlers();
+    // Signal handling
+    static void signal_handler(int sig);
+    void setup_signal_handlers();
 
 public:
 	Server(int port, std::string pass);
@@ -47,6 +47,8 @@ public:
 
 	void init();
 	void run();
+    // Server state display (public for debug triggers)
+    void display_server_state();
 	
 	// Getters for Commands class
 	const std::string& getPassword() const { return _pass; }

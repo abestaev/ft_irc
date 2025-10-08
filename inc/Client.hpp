@@ -19,6 +19,13 @@ public:
 	std::string inbuf;
 	bool is_operator;
 	
+	// User modes
+	bool is_invisible;
+	bool is_wallops;
+	bool is_restricted;
+	bool is_global_operator;
+	bool is_local_operator;
+	
 	// Registration requirements
 	bool password_is_valid;
 	bool nick_given;
@@ -35,6 +42,7 @@ public:
 	void setNick(const std::string& new_nick);
 	void setUser(const std::string& username, const std::string& realname);
 	bool isRegistered() const;
+	std::string getUserModes() const;
 };
 
 #endif
