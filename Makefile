@@ -1,7 +1,8 @@
 NAME		= ircserv
 SRCDIR		= src
-SRCS		= main.cpp Server.cpp Client.cpp Message.cpp Channel.cpp Commands.cpp
-SRCS		:= $(addprefix $(SRCDIR)/, $(SRCS))
+CMDDIR		= $(SRCDIR)/commands
+BASE_SRCS	= main.cpp Server.cpp Client.cpp Message.cpp Channel.cpp CommandsCore.cpp utils.cpp
+SRCS		= $(addprefix $(SRCDIR)/, $(BASE_SRCS)) $(wildcard $(CMDDIR)/*.cpp)
 INCDIR		= inc
 INCS		= ft_irc.hpp
 INCS		:= $(addprefix $(INCDIR)/, $(INCS))
@@ -12,12 +13,13 @@ CPPFLAGS	= -Wall -Wextra -Werror -std=c++98 -g3
 CPPC		= c++
 
 $(OBJDIR):
-	@mkdir $(OBJDIR)
+	@mkdir -p $(OBJDIR)
 
 $(NAME): $(OBJDIR) $(OBJS) $(INCS)
 	$(CPPC) $(CPPFLAGS) $(OBJS) -I$(INCDIR) -o $(NAME)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
+	@mkdir -p $(dir $@)
 	$(CPPC) $(CPPFLAGS) -I$(INCDIR) -o $@ -c $^
 
 all: $(NAME)

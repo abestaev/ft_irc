@@ -1,3 +1,4 @@
+// Legacy aggregator kept temporarily for build compatibility. Will be removed after split.
 #include "Commands.hpp"
 #include "Server.hpp"
 #include <unistd.h>
@@ -6,13 +7,8 @@
 #include <cstdlib>
 #include <iostream>
 
-// Utility function for C++98 compatibility
-std::string int_to_string(int value)
-{
-	std::ostringstream oss;
-	oss << value;
-	return oss.str();
-}
+// Moved to utils.cpp
+std::string int_to_string(int value);
 
 Commands::Commands(Server* server) : _server(server) {}
 const std::string& Commands::getServerCreatedAt() const { return _server->getCreatedAt(); }
@@ -81,27 +77,8 @@ int Commands::execute_command(const Message& msg, Client& sender)
 	return -1;
 }
 
-static void maybe_complete_registration(Client &sender, Commands *self)
-{
-	if (sender.isRegistered() && !sender.is_fully_registered) {
-		sender.is_fully_registered = true;
-		std::cout << "\033[32m[AUTH]\033[0m " << sender.nick << " registered successfully" << std::endl;
-        // Minimal but friendlier registration burst for better client compatibility
-        std::string prefix = sender.nick;
-        if (!sender.username.empty() && !sender.hostname.empty())
-            prefix += "!" + sender.username + "@" + sender.hostname;
-        self->send_reply(sender, 001, "Welcome to the Internet Relay Network " + prefix);
-        self->send_reply(sender, 002, "Your host is ircserv, running version 1.0");
-        {
-            self->send_reply(sender, 003, std::string("This server was created ") + self->getServerCreatedAt());
-        }
-        self->send_reply(sender, 004, "ircserv 1.0 o o");
-        // Minimal MOTD
-        self->send_reply(sender, 375, ":ircserv Message of the day");
-        self->send_reply(sender, 372, ":- Welcome to ft_irc");
-        self->send_reply(sender, 376, ":End of /MOTD command");
-	}
-}
+// Moved to CommandsCore.cpp
+static void maybe_complete_registration(Client &sender, Commands *self);
 
 int Commands::cmd_cap(const Message& msg, Client& sender)
 {
