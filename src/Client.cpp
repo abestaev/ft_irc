@@ -37,6 +37,8 @@ Client::Client(const Client& other)
 	username = other.username;
 	realname = other.realname;
 	hostname = other.hostname;
+    inbuf = other.inbuf;
+    outbuf = other.outbuf;
 	is_operator = other.is_operator;
 	is_invisible = other.is_invisible;
 	is_wallops = other.is_wallops;
@@ -62,6 +64,8 @@ Client& Client::operator=(const Client& other)
 		username = other.username;
 		realname = other.realname;
 		hostname = other.hostname;
+    	inbuf = other.inbuf;
+    	outbuf = other.outbuf;
 		is_operator = other.is_operator;
 		is_invisible = other.is_invisible;
 		is_wallops = other.is_wallops;

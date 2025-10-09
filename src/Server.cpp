@@ -59,6 +59,7 @@ void Server::setup_signal_handlers()
 {
 	signal(SIGINT, signal_handler);   // Ctrl+C
 	signal(SIGTERM, signal_handler);  // kill command
+    signal(SIGPIPE, SIG_IGN);         // ignore SIGPIPE on send() to closed sockets
 }
 
 void Server::init()
@@ -89,9 +90,14 @@ void Server::init()
 	_nfds = 1;
 	_pfds[0].fd = _sockfd;
 	_pfds[0].events = POLLIN;
+	_pfds[0].revents = 0;
 	
 	for (int i = 1; i <= MAX_CLIENTS; i++)
+	{
 		_pfds[i].fd = -1;
+		_pfds[i].events = 0;
+		_pfds[i].revents = 0;
+	}
 }
 
 void Server::run()
@@ -164,11 +170,10 @@ void Server::process_client_messages()
             else
             {
                 // Read error (bytes < 0)
-                // Subject forbids using errno to trigger actions
+                // Subject forbids using errno to trigger actions; treat as transient
                 std::cout << "\033[31m[ERROR]\033[0m Failed to read from socket fd:" << _pfds[i].fd 
                           << " (" << strerror(errno) << ")" << std::endl;
-                handle_client_disconnect(i);
-                i--;
+                // Do not disconnect here; rely on POLLERR/POLLHUP to close
                 continue;
             }
             
@@ -228,9 +233,8 @@ void Server::process_client_messages()
                 else
                 {
                     // Send error (sent <= 0)
-                    // Subject forbids using errno to trigger actions
-                    handle_client_disconnect(i);
-                    i--;
+                    // Subject forbids using errno to trigger actions; treat as transient
+                    // Keep data in outbuf, retry on next POLLOUT or close on POLLERR/POLLHUP
                     continue;
                 }
             }
@@ -244,6 +248,15 @@ void Server::process_client_messages()
         if (_pfds[i].revents & POLLERR)
         {
             handle_client_disconnect(i);
+            i--;
+            continue;
+        }
+
+        if (_pfds[i].revents & (POLLHUP | POLLNVAL))
+        {
+            handle_client_disconnect(i);
+            i--;
+            continue;
         }
         
         if (_pfds[i].revents != 0) {
@@ -290,6 +303,8 @@ void Server::handle_client_disconnect(int client_index)
 		_pfds[j] = _pfds[j + 1];
 		if (j > 0 && j < MAX_CLIENTS) {
 			_clients[j - 1] = _clients[j];
+			// Re-bind the pfd pointer to the shifted pollfd slot
+			_clients[j - 1].pfdp = &(_pfds[j]);
 		}
 	}
 	_nfds--;
@@ -405,6 +420,7 @@ void Server::accept_new_clients()
 		{
 			_pfds[slot].fd = client.fd;
 			_pfds[slot].events = POLLIN;
+			_pfds[slot].revents = 0;
 			client.pfdp = &(_pfds[slot]);
 			_clients[slot - 1] = client;
 			_nfds++;
@@ -428,6 +444,7 @@ void Server::accept_new_clients()
 		{
 			_pfds[slot].fd = client.fd;
 			_pfds[slot].events = POLLOUT;  // Only write, will close after
+			_pfds[slot].revents = 0;
 			client.pfdp = &(_pfds[slot]);
 			_clients[slot - 1] = client;
 			_clients[slot - 1].nick = "FULL_SERVER_TEMP";  // Mark for cleanup
