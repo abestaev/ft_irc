@@ -8,7 +8,7 @@ int Commands::cmd_ping(const Message& msg, Client& sender)
         return -1;
     }
     std::string token = msg.getParams()[0];
-    std::string response = "PONG :" + token + "\r\n";
+    std::string response = ":ircserv PONG ircserv :" + token + "\r\n";
     sendToClient(sender, response);
     return 0;
 }
