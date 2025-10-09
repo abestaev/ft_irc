@@ -132,22 +132,22 @@ irssi
 
 ### Single Poll() Loop
 ```
-┌─────────────────────────────────────────┐
-│     Main Loop (Server::run)             │
+┌──────────────────────────────────────────┐
+│     Main Loop (Server::run)              │
 │                                          │
 │  while (!signal) {                       │
-│      poll(_pfds, _nfds, 100ms);         │ ← ONE poll() call
+│      poll(_pfds, _nfds, 100ms);          │ ← ONE poll() call
 │                                          │
-│      if (POLLIN on listening socket)    │
-│          → accept_new_clients()         │ (1 accept/cycle)
+│      if (POLLIN on listening socket)     │
+│          → accept_new_clients()          │ (1 accept/cycle)
 │                                          │
-│      if (POLLIN on client socket)       │
-│          → process_client_messages()    │ (1 read/client)
+│      if (POLLIN on client socket)        │
+│          → process_client_messages()     │ (1 read/client)
 │                                          │
-│      if (POLLOUT on client socket)      │
-│          → flush output buffers         │ (1 send/client)
+│      if (POLLOUT on client socket)       │
+│          → flush output buffers          │ (1 send/client)
 │  }                                       │
-└─────────────────────────────────────────┘
+└──────────────────────────────────────────┘
 ```
 
 ### Data Flow
@@ -216,15 +216,6 @@ Client → [recv] → inbuf → [parse] → Command → [process] → outbuf →
 ---
 
 ## 🧪 Testing
-
-### Automated Tests
-
-```bash
-# Test partial data handling (as per subject requirement)
-./test_partial_data.sh
-
-# Expected: All 10 tests pass ✓
-```
 
 ### Manual Testing Scenarios
 
@@ -359,9 +350,6 @@ ft_irc/
 │       └── ERROR.cpp            # Error handling
 │
 ├── Makefile                      # Build configuration
-├── README.md                     # This file
-├── test_partial_data.sh          # Automated partial data tests
-└── .gitignore                    # Git ignore rules
 ```
 
 ### Key Classes
@@ -393,16 +381,6 @@ Edit `inc/config.hpp` to customize:
 - No services (NickServ, ChanServ)
 - Minimal capability negotiation (CAP)
 
-### Optional IRC Features Not Implemented
-- `LUSERS` command (user statistics)
-- `STATS` command (server statistics)
-- `ADMIN` command (admin info)
-- `MOTD` reload without restart
-- Channel ban lists (+b mode)
-- Channel exceptions (+e mode)
-- Voice mode (+v)
-
----
 
 ## 🎯 Subject Compliance Checklist
 
@@ -411,7 +389,6 @@ Edit `inc/config.hpp` to customize:
 - [x] Non-blocking I/O on all operations
 - [x] One single `poll()` (or equivalent)
 - [x] `poll()` called before each `accept/read/recv/write/send`
-- [x] `fcntl(fd, F_SETFL, O_NONBLOCK)` exact form
 - [x] No other `fcntl()` usage
 - [x] No `errno` checks after I/O operations
 - [x] TCP/IP (v4) sockets
@@ -440,7 +417,7 @@ Edit `inc/config.hpp` to customize:
 - [x] `MODE` - Channel/user modes (operator)
 - [x] `PING/PONG` - Keep-alive
 
-### Bonus (Channel Modes)
+### Channel Modes
 - [x] `+i` - Invite-only channel
 - [x] `+t` - Topic restriction (operators only)
 - [x] `+k` - Channel password
@@ -459,22 +436,3 @@ Edit `inc/config.hpp` to customize:
 
 ---
 
-## 👥 Authors
-
-- **albestae** - 42 Network
-
----
-
-## 📄 License
-
-This project is part of the 42 curriculum and follows school guidelines.
-
----
-
-<div align="center">
-
-**Built with ❤️ for 42**
-
-⭐ Star this repo if you found it helpful!
-
-</div>
