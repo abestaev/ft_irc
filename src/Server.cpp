@@ -239,7 +239,33 @@ void Server::process_client_messages()
         
         if (_pfds[i].revents & POLLOUT)
         {
-            _pfds[i].events &= ~POLLOUT;
+            // Socket is writable, attempt to flush output buffer
+            if (i - 1 < MAX_CLIENTS && !_clients[i - 1].outbuf.empty())
+            {
+                ssize_t sent = send(_clients[i - 1].fd, _clients[i - 1].outbuf.c_str(), _clients[i - 1].outbuf.length(), 0);
+                if (sent > 0)
+                {
+                    _clients[i - 1].outbuf.erase(0, sent);
+                }
+                else if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+                {
+                    // Write error, disconnect
+                    handle_client_disconnect(i);
+                    i--;
+                    continue;
+                }
+                
+                // If buffer now empty, disable POLLOUT
+                if (_clients[i - 1].outbuf.empty())
+                {
+                    _pfds[i].events &= ~POLLOUT;
+                }
+            }
+            else
+            {
+                // No data to send, disable POLLOUT
+                _pfds[i].events &= ~POLLOUT;
+            }
         }
         
         if (_pfds[i].revents & POLLERR)
@@ -450,4 +476,16 @@ void Server::display_server_state()
 	
 	std::cout << "\033[34m[STATE]\033[0m Connected clients: " << connected_clients << std::endl;
 	std::cout << "\033[34m[STATE]\033[0m Active channels: " << active_channels << std::endl;
+}
+
+void Server::queueSend(Client& client, const std::string& data)
+{
+	if (client.fd == -1) return;
+	
+	client.outbuf += data;
+	
+	// Enable POLLOUT to be notified when socket is writable
+	if (client.pfdp) {
+		client.pfdp->events |= POLLOUT;
+	}
 }

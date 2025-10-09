@@ -99,18 +99,23 @@ bool Commands::is_channel_valid(const std::string& channel) const
     return true;
 }
 
+void Commands::sendToClient(Client& client, const std::string& data)
+{
+    _server->queueSend(client, data);
+}
+
 void Commands::send_error(Client& client, int error_code, const std::string& message) const
 {
     std::string nick = client.nick.empty() ? "*" : client.nick;
     std::string error_msg = ":" + std::string("ircserv") + " " + int_to_string(error_code) + " " + nick + " " + message + "\r\n";
-    write(client.fd, error_msg.c_str(), error_msg.length());
+    const_cast<Commands*>(this)->sendToClient(client, error_msg);
 }
 
 void Commands::send_reply(Client& client, int reply_code, const std::string& message) const
 {
     std::string nick = client.nick.empty() ? "*" : client.nick;
     std::string reply_msg = ":" + std::string("ircserv") + " " + int_to_string(reply_code) + " " + nick + " " + message + "\r\n";
-    write(client.fd, reply_msg.c_str(), reply_msg.length());
+    const_cast<Commands*>(this)->sendToClient(client, reply_msg);
 }
 
 

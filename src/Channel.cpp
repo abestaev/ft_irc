@@ -1,4 +1,5 @@
 #include "Channel.hpp"
+#include "Server.hpp"
 #include <unistd.h>
 
 Channel::Channel(const std::string& name): 
@@ -68,6 +69,17 @@ void Channel::broadcast(const std::string& message, int exclude_fd) const
 		if (_clients[i].fd != -1 && _clients[i].fd != exclude_fd)
 		{
 			write(_clients[i].fd, message.c_str(), message.length());
+		}
+	}
+}
+
+void Channel::broadcastQueued(const std::string& message, int exclude_fd, Server* server) const
+{
+	for (int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if (_clients[i].fd != -1 && _clients[i].fd != exclude_fd)
+		{
+			server->queueSend(const_cast<Client&>(_clients[i]), message);
 		}
 	}
 }

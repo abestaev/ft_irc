@@ -66,7 +66,7 @@ int Commands::cmd_join(const Message& msg, Client& sender)
         else send_reply(sender, 332, channel_name + " :" + topic);
         std::string names = ch->build_names_list();
         std::string r353 = ":ircserv 353 " + (sender.nick.empty() ? std::string("*") : sender.nick) + " = " + channel_name + " :" + names + "\r\n";
-        write(sender.fd, r353.c_str(), r353.length());
+        sendToClient(sender, r353);
         send_reply(sender, 366, channel_name + " :End of /NAMES list");
         success_count++;
     }

@@ -49,7 +49,7 @@ int Commands::cmd_invite(const Message& msg, Client& sender)
     {
         const std::string inviter = sender.nick.empty() ? std::string("*") : sender.nick;
         const std::string r341 = ":ircserv 341 " + inviter + " " + nick + " " + channel_name + "\r\n";
-        write(sender.fd, r341.c_str(), r341.length());
+        sendToClient(sender, r341);
     }
 
     // Notify target with proper prefix
@@ -58,7 +58,7 @@ int Commands::cmd_invite(const Message& msg, Client& sender)
         if (!sender.username.empty() && !sender.hostname.empty())
             prefix += "!" + sender.username + "@" + sender.hostname;
         const std::string wire = ":" + prefix + " INVITE " + nick + " " + channel_name + "\r\n";
-        write(target.fd, wire.c_str(), wire.length());
+        sendToClient(target, wire);
     }
     return 0;
 }

@@ -33,6 +33,7 @@ public:
 	void remove_client(const Client& client);
 	bool has_client(const Client& client) const;
 	void broadcast(const std::string& message, int exclude_fd) const;
+	void broadcastQueued(const std::string& message, int exclude_fd, class Server* server) const;
 	std::string build_names_list() const;
     int get_user_count() const;
     int find_client_index(const Client& client) const;

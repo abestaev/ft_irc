@@ -63,6 +63,9 @@ public:
 	
 	// Signal handling
 	static bool should_stop() { return _sig; }
+	
+	// Non-blocking send helper
+	void queueSend(Client& client, const std::string& data);
 };
 
 #endif

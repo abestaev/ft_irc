@@ -36,7 +36,7 @@ int Commands::cmd_nick(const Message& msg, Client& sender)
         std::vector<Channel>& chans = _server->getChannels();
         for (size_t i = 0; i < chans.size(); ++i) {
             if (chans[i].has_client(sender)) {
-                chans[i].broadcast(wire, sender.fd);
+                chans[i].broadcastQueued(wire, sender.fd, _server);
             }
         }
     }

@@ -63,7 +63,7 @@ int Commands::cmd_mode(const Message& msg, Client& sender)
     if (!appliedSpec.empty()) {
         std::string prefix = sender.nick; if (!sender.username.empty() && !sender.hostname.empty()) prefix += "!" + sender.username + "@" + sender.hostname;
         std::string wire = ":" + prefix + " MODE " + sender.nick + " " + appliedSpec + "\r\n";
-        Client* clients = _server->getClients(); for (int i = 0; i < _server->getMaxClients(); i++) { if (clients[i].fd != -1) { write(clients[i].fd, wire.c_str(), wire.length()); } }
+        Client* clients = _server->getClients(); for (int i = 0; i < _server->getMaxClients(); i++) { if (clients[i].fd != -1) { sendToClient(clients[i], wire); } }
     }
     return 0;
 }

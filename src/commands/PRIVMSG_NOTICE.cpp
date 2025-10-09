@@ -20,7 +20,7 @@ int Commands::cmd_privmsg(const Message& msg, Client& sender)
             std::string wire = ":" + (sender.nick.empty() ? std::string("*") : sender.nick);
             if (!sender.username.empty() && !sender.hostname.empty()) wire += "!" + sender.username + "@" + sender.hostname;
             wire += " PRIVMSG " + target + " :" + text + "\r\n";
-            write(clients[i].fd, wire.c_str(), wire.length());
+            sendToClient(clients[i], wire);
             return 0;
         }
     }
@@ -44,7 +44,7 @@ int Commands::cmd_notice(const Message& msg, Client& sender)
             std::string wire = ":" + (sender.nick.empty() ? std::string("*") : sender.nick);
             if (!sender.username.empty() && !sender.hostname.empty()) wire += "!" + sender.username + "@" + sender.hostname;
             wire += " NOTICE " + target + " :" + text + "\r\n";
-            write(clients[i].fd, wire.c_str(), wire.length());
+            sendToClient(clients[i], wire);
             return 0;
         }
     }

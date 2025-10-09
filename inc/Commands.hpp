@@ -52,6 +52,9 @@ public:
 
     // Accessors needed by helpers
     const std::string& getServerCreatedAt() const;
+    
+    // Helper to queue send via Server
+    void sendToClient(Client& client, const std::string& data);
 };
 
 #endif

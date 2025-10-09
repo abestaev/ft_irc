@@ -9,7 +9,7 @@ int Commands::cmd_ping(const Message& msg, Client& sender)
     }
     std::string token = msg.getParams()[0];
     std::string response = "PONG :" + token + "\r\n";
-    write(sender.fd, response.c_str(), response.length());
+    sendToClient(sender, response);
     return 0;
 }
 

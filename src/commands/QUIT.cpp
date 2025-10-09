@@ -19,7 +19,7 @@ int Commands::cmd_quit(const Message& msg, Client& sender)
     for (size_t i = 0; i < chans.size(); ++i) {
         if (chans[i].has_client(sender)) {
             std::cout << "\033[33m[CHANNEL]\033[0m " << sender.nick << " left " << chans[i].getName() << std::endl;
-            chans[i].broadcast(wire, sender.fd);
+            chans[i].broadcastQueued(wire, sender.fd, _server);
             chans[i].remove_client(sender);
             if (chans[i].get_user_count() == 0) {
                 std::cout << "\033[33m[CHANNEL]\033[0m Deleted channel " << chans[i].getName() << std::endl;
@@ -30,7 +30,7 @@ int Commands::cmd_quit(const Message& msg, Client& sender)
     }
 
     std::string response = "ERROR :Closing Link: " + reason + "\r\n";
-    write(sender.fd, response.c_str(), response.length());
+    sendToClient(sender, response);
     close(sender.fd);
     return -1;
 }

@@ -17,6 +17,7 @@ public:
 	std::string realname;
 	std::string hostname;
 	std::string inbuf;
+	std::string outbuf;  // Output buffer for non-blocking writes
 	bool is_operator;
 	
 	// User modes

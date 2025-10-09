@@ -7,12 +7,12 @@ int Commands::cmd_list(const Message& msg, Client& sender)
 {
     (void)msg;
     std::string line = ":ircserv 321 " + (sender.nick.empty() ? std::string("*") : sender.nick) + " Channel :Users Name\r\n";
-    write(sender.fd, line.c_str(), line.length());
+    sendToClient(sender, line);
     std::vector<Channel>& chans = _server->getChannels();
     for (size_t i = 0; i < chans.size(); ++i) {
         Channel &c = chans[i];
         std::string l2 = ":ircserv 322 " + (sender.nick.empty() ? std::string("*") : sender.nick) + " " + c.getName() + " " + int_to_string(c.get_user_count()) + " :" + c.getTopic() + "\r\n";
-        write(sender.fd, l2.c_str(), l2.length());
+        sendToClient(sender, l2);
     }
     send_reply(sender, 323, ":End of /LIST");
     return 0;
@@ -27,7 +27,7 @@ int Commands::cmd_names(const Message& msg, Client& sender)
         if (!ch) { send_error(sender, 403, channel_name + " :No such channel"); return -1; }
         std::string names = ch->build_names_list();
         std::string r353 = ":ircserv 353 " + (sender.nick.empty() ? std::string("*") : sender.nick) + " = " + channel_name + " :" + names + "\r\n";
-        write(sender.fd, r353.c_str(), r353.length());
+        sendToClient(sender, r353);
         send_reply(sender, 366, channel_name + " :End of /NAMES list");
     } else {
         send_reply(sender, 366, ":End of /NAMES list");
