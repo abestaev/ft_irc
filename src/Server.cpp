@@ -145,68 +145,34 @@ void Server::process_client_messages()
     {
         if (_pfds[i].revents & POLLIN)
         {
-            bool disconnect = false;
-            while (true)
+            // Read once per poll() call (subject requirement)
+            int bytes = read(_pfds[i].fd, buf, BUFFER_SIZE);
+            
+            if (bytes > 0)
             {
-                int bytes = read(_pfds[i].fd, buf, BUFFER_SIZE);
-                if (bytes > 0)
-                {
-                    if (i - 1 < MAX_CLIENTS) {
-                        _clients[i - 1].inbuf.append(buf, bytes);
-                        // Incrementally parse complete lines from buffer to avoid waiting for EAGAIN
-                        std::string &inbuf = _clients[i - 1].inbuf;
-                        while (true) {
-                            std::string::size_type posCRLF = inbuf.find("\r\n");
-                            if (posCRLF != std::string::npos) {
-                                std::string raw = inbuf.substr(0, posCRLF + 2);
-                                inbuf.erase(0, posCRLF + 2);
-                                parse_message(raw, _clients[i - 1]);
-                                continue;
-                            }
-                            std::string::size_type posLF = inbuf.find('\n');
-                            if (posLF != std::string::npos) {
-                                std::string line = inbuf.substr(0, posLF);
-                                if (!line.empty() && line[line.size() - 1] == '\r') {
-                                    line.erase(line.size() - 1);
-                                }
-                                std::string raw = line + "\r\n";
-                                inbuf.erase(0, posLF + 1);
-                                parse_message(raw, _clients[i - 1]);
-                                continue;
-                            }
-                            break;
-                        }
-                    }
-                    // continue draining until EAGAIN to keep latency low
-                    continue;
-                }
-                if (bytes == 0)
-                {
-                    // Peer closed connection
-                    disconnect = true;
-                    break;
-                }
-                if (bytes < 0)
-                {
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        // drained
-                        break;
-                    }
-                    std::cout << "\033[31m[ERROR]\033[0m Failed to read from socket fd:" << _pfds[i].fd 
-                              << " (" << strerror(errno) << ")" << std::endl;
-                    disconnect = true;
-                    break;
+                if (i - 1 < MAX_CLIENTS) {
+                    _clients[i - 1].inbuf.append(buf, bytes);
                 }
             }
-            
-            if (disconnect)
+            else if (bytes == 0)
             {
+                // Peer closed connection
                 handle_client_disconnect(i);
-                i--; // adjust index since we shifted arrays
+                i--;
+                continue;
+            }
+            else
+            {
+                // Read error (bytes < 0)
+                // Subject forbids using errno to trigger actions
+                std::cout << "\033[31m[ERROR]\033[0m Failed to read from socket fd:" << _pfds[i].fd 
+                          << " (" << strerror(errno) << ")" << std::endl;
+                handle_client_disconnect(i);
+                i--;
                 continue;
             }
             
-            // Parse all complete lines from buffer. Accept both CRLF and bare LF.
+            // Parse all complete lines from buffer
             if (i - 1 < MAX_CLIENTS) {
                 std::string &inbuf = _clients[i - 1].inbuf;
                 while (true) {
@@ -237,26 +203,35 @@ void Server::process_client_messages()
         
         if (_pfds[i].revents & POLLOUT)
         {
-            // Socket is writable, attempt to flush output buffer
+            // Socket is writable, send once per poll() call (subject requirement)
             if (i - 1 < MAX_CLIENTS && !_clients[i - 1].outbuf.empty())
             {
                 ssize_t sent = send(_clients[i - 1].fd, _clients[i - 1].outbuf.c_str(), _clients[i - 1].outbuf.length(), 0);
                 if (sent > 0)
                 {
                     _clients[i - 1].outbuf.erase(0, sent);
+                    
+                    // If buffer now empty, disable POLLOUT
+                    if (_clients[i - 1].outbuf.empty())
+                    {
+                        _pfds[i].events &= ~POLLOUT;
+                        
+                        // If this was a "server full" temp client, disconnect now
+                        if (_clients[i - 1].nick == "FULL_SERVER_TEMP")
+                        {
+                            handle_client_disconnect(i);
+                            i--;
+                            continue;
+                        }
+                    }
                 }
-                else if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+                else
                 {
-                    // Write error, disconnect
+                    // Send error (sent <= 0)
+                    // Subject forbids using errno to trigger actions
                     handle_client_disconnect(i);
                     i--;
                     continue;
-                }
-                
-                // If buffer now empty, disable POLLOUT
-                if (_clients[i - 1].outbuf.empty())
-                {
-                    _pfds[i].events &= ~POLLOUT;
                 }
             }
             else
@@ -391,73 +366,80 @@ size_t Server::find_empty_slot()
 
 void Server::accept_new_clients()
 {
-	int connections_processed = 0;
-	const int MAX_CONNECTIONS_PER_ITERATION = 5;
+	// Accept once per poll() call (subject requirement)
+	Client client;
+	client.addrlen = sizeof(client.addr);
 	
-	while (_pfds[0].revents & POLLIN && connections_processed < MAX_CONNECTIONS_PER_ITERATION)
+	client.fd = accept(_sockfd, (struct sockaddr *)&client.addr, &client.addrlen);
+	if (client.fd < 0)
 	{
-		Client client;
-		client.addrlen = sizeof(client.addr);
-		
-		client.fd = accept(_sockfd, (struct sockaddr *)&client.addr, &client.addrlen);
-		if (client.fd < 0)
-		{
-			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-				// No more queued connections on non-blocking socket
-				break;
-			}
-			perror("accept error");
-			break;
-		}
-		// accepted new connection
-		
-		fcntl(client.fd, F_SETFL, O_NONBLOCK);
+		// Accept failed (no errno check per subject requirement)
+		// Will try again on next poll()
+		_pfds[0].revents = 0;
+		return;
+	}
+	
+	// accepted new connection
+	fcntl(client.fd, F_SETFL, O_NONBLOCK);
 
-		// Enable TCP_NODELAY to reduce latency (disable Nagle)
-		int nodelay = 1;
-		setsockopt(client.fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
+	// Enable TCP_NODELAY to reduce latency (disable Nagle)
+	int nodelay = 1;
+	setsockopt(client.fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
 
-		// Fill hostname field for client (IPv4)
-		char hostbuf[INET_ADDRSTRLEN];
-		const char *hp = inet_ntop(AF_INET, &client.addr.sin_addr, hostbuf, sizeof(hostbuf));
-		if (hp) {
-			client.hostname = std::string(hostbuf);
-		}
-		
-		// Get client port for logging
-		int client_port = ntohs(client.addr.sin_port);
-		std::cout << "\033[36m[CONNECT]\033[0m New client connected from " << client.hostname 
-				  << ":" << client_port << " (fd: " << client.fd << ")" << std::endl;
-		
-		if ((_nfds - 1) < MAX_CLIENTS)
+	// Fill hostname field for client (IPv4)
+	char hostbuf[INET_ADDRSTRLEN];
+	const char *hp = inet_ntop(AF_INET, &client.addr.sin_addr, hostbuf, sizeof(hostbuf));
+	if (hp) {
+		client.hostname = std::string(hostbuf);
+	}
+	
+	// Get client port for logging
+	int client_port = ntohs(client.addr.sin_port);
+	std::cout << "\033[36m[CONNECT]\033[0m New client connected from " << client.hostname 
+			  << ":" << client_port << " (fd: " << client.fd << ")" << std::endl;
+	
+	if ((_nfds - 1) < MAX_CLIENTS)
+	{
+		size_t slot = find_empty_slot();
+		if (slot > 0 && slot <= MAX_CLIENTS)
 		{
-			size_t slot = find_empty_slot();
-			if (slot > 0 && slot <= MAX_CLIENTS)
-			{
-				_pfds[slot].fd = client.fd;
-				_pfds[slot].events = POLLIN;
-				client.pfdp = &(_pfds[slot]);
-				_clients[slot - 1] = client;
-				_nfds++;
-				connections_processed++;
-				// client assigned to slot
-                // Show state when a new client is accepted
-                display_server_state();
-			}
-			else
-			{
-				close(client.fd);
-			}
+			_pfds[slot].fd = client.fd;
+			_pfds[slot].events = POLLIN;
+			client.pfdp = &(_pfds[slot]);
+			_clients[slot - 1] = client;
+			_nfds++;
+			// client assigned to slot
+			// Show state when a new client is accepted
+			display_server_state();
 		}
 		else
 		{
-			write(client.fd, "ERROR :Server full, try again later\r\n", 38);
+			close(client.fd);
+		}
+	}
+	else
+	{
+		// Server full - queue error message for sending
+		std::string error_msg = "ERROR :Server full, try again later\r\n";
+		client.outbuf = error_msg;
+		// Add temporarily to send the error (will be closed after send)
+		size_t slot = find_empty_slot();
+		if (slot > 0 && slot <= MAX_CLIENTS)
+		{
+			_pfds[slot].fd = client.fd;
+			_pfds[slot].events = POLLOUT;  // Only write, will close after
+			client.pfdp = &(_pfds[slot]);
+			_clients[slot - 1] = client;
+			_clients[slot - 1].nick = "FULL_SERVER_TEMP";  // Mark for cleanup
+			_nfds++;
+		}
+		else
+		{
 			close(client.fd);
 		}
 	}
 	
 	_pfds[0].revents = 0;
-	
 }
 
 void Server::display_server_state()
