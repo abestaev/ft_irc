@@ -73,9 +73,7 @@ void Server::init()
 	int opt = 1;
 	setsockopt(_sockfd, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt));
 	// Make listening socket non-blocking
-	int lflags = fcntl(_sockfd, F_GETFL, 0);
-	if (lflags != -1)
-		fcntl(_sockfd, F_SETFL, lflags | O_NONBLOCK);
+	fcntl(_sockfd, F_SETFL, O_NONBLOCK);
 	
 
 	_addr.sin_family = AF_INET;
@@ -413,8 +411,7 @@ void Server::accept_new_clients()
 		}
 		// accepted new connection
 		
-		int flags = fcntl(client.fd, F_GETFL, 0);
-		fcntl(client.fd, F_SETFL, flags | O_NONBLOCK);
+		fcntl(client.fd, F_SETFL, O_NONBLOCK);
 
 		// Enable TCP_NODELAY to reduce latency (disable Nagle)
 		int nodelay = 1;
