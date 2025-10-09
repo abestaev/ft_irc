@@ -1,6 +1,8 @@
 #include "Commands.hpp"
 #include "Server.hpp"
 #include "utils.hpp"
+#include <unistd.h>
+#include <cstdlib>
 
 int Commands::cmd_mode(const Message& msg, Client& sender)
 {

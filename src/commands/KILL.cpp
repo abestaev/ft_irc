@@ -1,6 +1,7 @@
 #include "Commands.hpp"
 #include "Server.hpp"
 #include <unistd.h>
+#include <iostream>
 
 int Commands::cmd_kill(const Message& msg, Client& sender)
 {

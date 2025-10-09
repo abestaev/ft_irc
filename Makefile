@@ -1,7 +1,7 @@
 NAME		= ircserv
 SRCDIR		= src
 CMDDIR		= $(SRCDIR)/commands
-BASE_SRCS	= main.cpp Server.cpp Client.cpp Message.cpp Channel.cpp CommandsCore.cpp utils.cpp
+BASE_SRCS	= main.cpp Server.cpp Client.cpp Message.cpp Channel.cpp Commands.cpp utils.cpp
 SRCS		= $(addprefix $(SRCDIR)/, $(BASE_SRCS)) $(wildcard $(CMDDIR)/*.cpp)
 INCDIR		= inc
 INCS		= ft_irc.hpp

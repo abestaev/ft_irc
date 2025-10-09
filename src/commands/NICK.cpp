@@ -1,4 +1,5 @@
 #include "Commands.hpp"
+#include "Server.hpp"
 #include "utils.hpp"
 #include <iostream>
 
