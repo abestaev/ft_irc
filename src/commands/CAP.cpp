@@ -3,12 +3,19 @@
 
 int Commands::cmd_cap(const Message& msg, Client& sender)
 {
+    if (sender.is_fully_registered)
+    {
+        send_error(sender, 462, "CAP :This command can only be used at registration");
+        return -1;
+    }
+
     if (msg.getParamCount() < 1) {
         send_error(sender, 461, "CAP :Not enough parameters");
         return -1;
     }
 
     if (msg.getParams()[0] == "LS") {
+        sender.ongoing_negociation = true;
         std::string response = "CAP * LS :\r\n";
         sendToClient(sender, response);
     } else if (msg.getParams()[0] == "LIST") {
@@ -19,6 +26,9 @@ int Commands::cmd_cap(const Message& msg, Client& sender)
         std::string response = "CAP * NAK :" + requested + "\r\n";
         sendToClient(sender, response);
     } else if (msg.getParams()[0] == "END") {
+        sender.ongoing_negociation = false;
+        if (sender.isReadyForRegistration())
+            attempt_registration(sender);
         // nothing to do
     }
     return 0;

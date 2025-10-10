@@ -94,9 +94,14 @@ void Client::setUser(const std::string& new_username, const std::string& new_rea
 	user_given = true;
 }
 
-bool Client::isRegistered() const
+// bool Client::isRegistered() const
+// {
+// 	return password_is_valid && nick_given && user_given;
+// }
+
+bool Client::isReadyForRegistration() const
 {
-	return password_is_valid && nick_given && user_given;
+	return nick_given && user_given && !ongoing_negociation;
 }
 
 std::string Client::getUserModes() const

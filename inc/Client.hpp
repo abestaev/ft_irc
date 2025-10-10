@@ -28,10 +28,33 @@ public:
 	bool is_local_operator;
 	
 	// Registration requirements
+	bool ongoing_negociation;
 	bool password_is_valid;
 	bool nick_given;
 	bool user_given;
 	bool is_fully_registered;
+
+	/*
+
+	if CAP LS
+	set ongoing_negociation and reply CAP * LS
+	until CAP END is received, then unset ongoing_negociation
+
+	if !ongoing_negociation and received CAP END
+		ignore
+	
+	if received CAP REQ :cap_name
+	respond with CAP NAK :cap_name
+
+	ready_for_registration: has received nick and user
+
+	if ready_for_negociation and !ongoing_negociation
+		attempt registration
+
+	registration attempt:
+		- check if password is valid. if it isnt, send error 464 and close connection.
+		- check if nickname is valid (no collision or )
+	*/
 
 	Client();
 	Client(const Client& other);
@@ -42,7 +65,8 @@ public:
 	// Utility methods
 	void setNick(const std::string& new_nick);
 	void setUser(const std::string& username, const std::string& realname);
-	bool isRegistered() const;
+	// bool isRegistered() const;
+	bool isReadyForRegistration() const;
 	std::string getUserModes() const;
 };
 

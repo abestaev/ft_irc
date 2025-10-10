@@ -11,7 +11,8 @@ class Commands
 {
 private:
 	Server* _server;
-    void maybe_complete_registration(Client& sender);
+    // void maybe_complete_registration(Client& sender);
+	void attempt_registration(Client& sender);
 
 public:
 	Commands(Server* server);

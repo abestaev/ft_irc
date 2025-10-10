@@ -5,6 +5,13 @@
 
 int Commands::cmd_pass(const Message& msg, Client& sender)
 {
+
+    if (sender.is_fully_registered)
+    {
+        send_error(sender, 462, "PASS :This command can only be used at registration");
+        return -1;
+    }
+
     if (msg.getParamCount() < 1) {
         send_error(sender, 461, "PASS :Not enough parameters");
         return -1;
@@ -12,15 +19,7 @@ int Commands::cmd_pass(const Message& msg, Client& sender)
 
     std::string password = msg.getParams()[0];
 
-    if (password == _server->getPassword()) {
-        sender.password_is_valid = true;
-        maybe_complete_registration(sender);
-    } else {
-        std::cout << "\033[31m[AUTH]\033[0m Connection refused (wrong password)" << std::endl;
-        send_error(sender, 464, "Password incorrect");
-        close(sender.fd);
-        return -1;
-    }
+    sender.password_is_valid = password == _server->getPassword();
     return 0;
 }
 
