@@ -265,48 +265,91 @@ void Server::process_client_messages()
     }
 }
 
+// void Server::handle_client_disconnect(int client_index)
+// {
+// 	if (client_index < 1 || client_index >= MAX_CLIENTS || _pfds[client_index].fd == -1) {
+// 		return;
+// 	}
+	
+//     // Preserve client before wiping to clean channels correctly
+//     Client departing = _clients[client_index - 1];
+
+// 	// Log disconnection
+//     std::string client_nick = _clients[client_index - 1].nick;
+// 	if (client_nick.empty()) {
+// 		client_nick = "unregistered";
+// 	}
+// 	std::cout << "\033[33m[DISCONNECT]\033[0m Client " << client_nick 
+// 			  << " (fd:" << _pfds[client_index].fd << ") disconnected" << std::endl;
+	
+//     // Remove the client from all channels and delete empty channels
+//     for (size_t i = 0; i < _channels.size(); ++i) {
+//         if (_channels[i].has_client(departing)) {
+//             _channels[i].remove_client(departing);
+//             if (_channels[i].get_user_count() == 0) {
+//                 std::cout << "\033[33m[CHANNEL]\033[0m Deleted channel " << _channels[i].getName() << std::endl;
+//                 _channels.erase(_channels.begin() + i);
+//                 i--;
+//             }
+//         }
+//     }
+
+// 	close(_pfds[client_index].fd);
+// 	_pfds[client_index].fd = -1;
+// 	_clients[client_index - 1] = Client();
+	
+// 	for (int j = client_index; j < _nfds - 1; j++)
+// 	{
+// 		_pfds[j] = _pfds[j + 1];
+// 		_pfds[j + 1].fd = -1;
+// 		if (j > 0 && j < MAX_CLIENTS) {
+// 			_clients[j - 1] = _clients[j];
+// 			// Re-bind the pfd pointer to the shifted pollfd slot
+// 			_clients[j - 1].pfdp = &(_pfds[j]);
+// 			_clients[j] = Client();
+// 		}
+// 	}
+// 	_nfds--;
+// }
+
 void Server::handle_client_disconnect(int client_index)
 {
-	if (client_index < 1 || client_index >= _nfds) {
-		return;
-	}
-	
-    // Preserve client before wiping to clean channels correctly
-    Client departing = _clients[client_index - 1];
+	if (client_index < 1 || client_index >= MAX_CLIENTS)
+		return ;
 
-	// Log disconnection
-    std::string client_nick = _clients[client_index - 1].nick;
-	if (client_nick.empty()) {
-		client_nick = "unregistered";
+	Client client = _clients[client_index - 1];
+
+	//LOG DISCONNECTION
+	std::cout << "\033[33m[DISCONNECT]\033[0m Client " << ( client.is_fully_registered ? client.nick : "unregistered" )
+		<< " (fd:" << _pfds[client_index].fd << ") disconnected" << std::endl;
+
+	std::vector<Channel>::iterator it;
+	for (it = _channels.begin(); it != _channels.end(); it++) {
+		if (it->has_client(client)) {
+			it->remove_client(client);
+			if (it->get_user_count() == 0) {
+				std::cout << "\033[33m[CHANNEL]\033[0m Deleted channel " << it->getName() << std::endl;
+				it = _channels.erase(it);
+			}
+		}
 	}
-	std::cout << "\033[33m[DISCONNECT]\033[0m Client " << client_nick 
-			  << " (fd:" << _pfds[client_index].fd << ") disconnected" << std::endl;
-	
-    // Remove the client from all channels and delete empty channels
-    for (size_t i = 0; i < _channels.size(); ++i) {
-        if (_channels[i].has_client(departing)) {
-            _channels[i].remove_client(departing);
-            if (_channels[i].get_user_count() == 0) {
-                std::cout << "\033[33m[CHANNEL]\033[0m Deleted channel " << _channels[i].getName() << std::endl;
-                _channels.erase(_channels.begin() + i);
-                i--;
-            }
-        }
-    }
 
 	close(_pfds[client_index].fd);
 	_pfds[client_index].fd = -1;
 	_clients[client_index - 1] = Client();
-	
+
 	for (int j = client_index; j < _nfds - 1; j++)
 	{
 		_pfds[j] = _pfds[j + 1];
+		_pfds[j + 1].fd = -1;
 		if (j > 0 && j < MAX_CLIENTS) {
 			_clients[j - 1] = _clients[j];
 			// Re-bind the pfd pointer to the shifted pollfd slot
 			_clients[j - 1].pfdp = &(_pfds[j]);
+			_clients[j] = Client();
 		}
 	}
+	
 	_nfds--;
 }
 
