@@ -22,7 +22,7 @@ int Commands::cmd_cap(const Message& msg, Client& sender)
         std::string response = "CAP * LIST :\r\n";
         sendToClient(sender, response);
     } else if (msg.getParams()[0] == "REQ") {
-        std::string requested = msg.hasTrailing() ? msg.getTrailing() : (msg.getParamCount() >= 2 ? msg.getParams()[1] : "");
+        std::string requested = msg.getParamCount() >= 2 ? msg.getParams()[1] : "";
         std::string response = "CAP * NAK :" + requested + "\r\n";
         sendToClient(sender, response);
     } else if (msg.getParams()[0] == "END") {

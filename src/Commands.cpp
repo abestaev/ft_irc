@@ -34,8 +34,8 @@ void Commands::attempt_registration(Client& sender)
     {
         std::cout << "\033[31m[AUTH]\033[0m Connection refused (wrong password)" << std::endl;
         send_error(sender, 464, "Password incorrect");
-        // shutdown(sender.fd, SHUT_WR);
-        close(sender.fd); //TODO: mark fd for closure instead of closing it right away (so that the error is actually send it) (valid for other closes) and close them all at next loop iteration (MAYBE)
+        // shutdown(sender.fd, SHUT_RD);
+        close(sender.fd); //TODO: mark fd for closure   instead of closing it right away (so that the error is actually sent) (valid for other closes) and close them all at next loop iteration (MAYBE)
         return ;
     }
 
@@ -88,28 +88,6 @@ int Commands::execute_command(const Message& msg, Client& sender)
     //         return -1;
     //     }
     // }
-
-    /*TODO reorganise
-
-	if CAP LS
-	set ongoing_negociation and reply CAP * LS
-	until CAP END is received, then unset ongoing_negociation
-
-	if !ongoing_negociation and received CAP END
-		ignore
-	
-	if received CAP REQ :cap_name
-	respond with CAP NAK :cap_name
-
-	ready_for_registration: has received nick and user. and pass?
-
-	if ready_for_negociation and !ongoing_negociation
-		attempt registration
-
-	registration attempt:
-		- check if password is valid. if it isnt, send error 464 and close connection.
-		- check if nickname is valid (no collision or invalid chars). if it isnt, send error 432 and wait for the client to send a new nickname, then register again.
-	*/
 
     if (command == "CAP") return cmd_cap(msg, sender);
     if (command == "PASS") return cmd_pass(msg, sender);

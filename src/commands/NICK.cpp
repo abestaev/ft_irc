@@ -15,7 +15,7 @@ int Commands::cmd_nick(const Message& msg, Client& sender)
 
 	if (sender.is_fully_registered)
 	{
-		//TODO: different behavior if sender is already registered
+		//done TODO: different behavior if sender is already registered
 	
 		if (!is_nick_valid(new_nick)) {
 			std::cout << "\033[31m[ERROR]\033[0m Invalid parameters for NICK: \"" << new_nick << "\"" << std::endl;
@@ -49,7 +49,6 @@ int Commands::cmd_nick(const Message& msg, Client& sender)
 		std::cout << "\033[32m[AUTH]\033[0m Client fd:" << sender.fd << " set nickname: \"" << new_nick << "\"" << std::endl;
 	} else {
 		sender.setNick(new_nick);
-		sender.nick_given = true;
 		if (sender.isReadyForRegistration())
 			attempt_registration(sender);
 	}

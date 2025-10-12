@@ -4,6 +4,7 @@
 #include <string>
 #include "Client.hpp"
 #include "Message.hpp"
+#include "irc_numerics.hpp"
 
 class Server;
 

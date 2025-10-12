@@ -11,7 +11,8 @@ private:
 	std::string _prefix;      // Optional prefix (nick!user@host)
 	std::string _command;     // Command name (NICK, USER, etc.)
 	std::vector<std::string> _params; // Command parameters
-	std::string _trailing;    // Trailing parameter (after :)
+	bool _has_trailing;
+	// std::string _trailing;    // Trailing parameter (after :)
 
 public:
 	Message();
@@ -22,11 +23,12 @@ public:
 	const std::string& getPrefix() const { return _prefix; }
 	const std::string& getCommand() const { return _command; }
 	const std::vector<std::string>& getParams() const { return _params; }
-	const std::string& getTrailing() const { return _trailing; }
+	// const std::string& getTrailing() const { return _trailing; }
 	
 	// Utility methods
 	bool hasPrefix() const { return !_prefix.empty(); }
-	bool hasTrailing() const { return !_trailing.empty(); }
+	// void hasTrailing(bool val) { _has_trailing = val; }
+	bool hasTrailing() const { return _has_trailing; }
 	size_t getParamCount() const { return _params.size(); }
 	
 	// Parse raw IRC message

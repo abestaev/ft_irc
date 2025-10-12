@@ -16,12 +16,12 @@ int Commands::cmd_invite(const Message& msg, Client& sender)
     Channel* ch = _server->find_channel(channel_name);
     if (!ch)
     {
-        send_error(sender, 403, channel_name + " :No such channel");
+        send_error(sender, ERR_NOSUCHCHANNEL, channel_name + " :No such channel");
         return -1;
     }
     if (!ch->isOperator(sender))
     {
-        send_error(sender, 482, channel_name + " :You're not channel operator");
+        send_error(sender, ERR_CHANOPRIVSNEEDED, channel_name + " :You're not channel operator");
         return -1;
     }
 
@@ -40,7 +40,7 @@ int Commands::cmd_invite(const Message& msg, Client& sender)
     }
     if (!found)
     {
-        send_error(sender, 401, nick + " :No such nick/channel");
+        send_error(sender, ERR_NOSUCHNICK, nick + " :No such nick/channel");
         return -1;
     }
 
@@ -77,12 +77,12 @@ int Commands::cmd_kick(const Message& msg, Client& sender)
     Channel* ch = _server->find_channel(channel_name);
     if (!ch)
     {
-        send_error(sender, 403, channel_name + " :No such channel");
+        send_error(sender, ERR_NOSUCHCHANNEL, channel_name + " :No such channel");
         return -1;
     }
     if (!ch->isOperator(sender))
     {
-        send_error(sender, 482, channel_name + " :You're not channel operator");
+        send_error(sender, ERR_CHANOPRIVSNEEDED, channel_name + " :You're not channel operator");
         return -1;
     }
 
@@ -101,12 +101,13 @@ int Commands::cmd_kick(const Message& msg, Client& sender)
     }
     if (!found || !ch->has_client(target))
     {
-        send_error(sender, 441, nick + " " + channel_name + " :They aren't on that channel");
+        send_error(sender, ERR_USERNOTINCHANNEL, nick + " " + channel_name + " :They aren't on that channel");
         return -1;
     }
 
     // Build and broadcast KICK
-    const std::string reason = msg.getTrailing();
+    
+    const std::string reason = msg.getParamCount() >= 3 ? msg.getParams()[2] : "";
     std::string prefix = sender.nick;
     if (!sender.username.empty() && !sender.hostname.empty())
         prefix += "!" + sender.username + "@" + sender.hostname;

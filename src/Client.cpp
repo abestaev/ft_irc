@@ -13,6 +13,7 @@ Client::Client():
 	is_restricted(false),
 	is_global_operator(false),
 	is_local_operator(false),
+	ongoing_negociation(false),
 	password_is_valid(false),
 	nick_given(false),
 	user_given(false),
@@ -49,6 +50,7 @@ Client::Client(const Client& other)
 	nick_given = other.nick_given;
 	user_given = other.user_given;
 	is_fully_registered = other.is_fully_registered;
+	ongoing_negociation = other.ongoing_negociation;
 }
 
 // Assignment operator
