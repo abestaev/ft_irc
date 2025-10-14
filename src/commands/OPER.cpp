@@ -6,7 +6,7 @@
 int Commands::cmd_oper(const Message& msg, Client& sender)
 {
     if (msg.getParamCount() < 2) {
-        send_error(sender, 461, "OPER :Not enough parameters");
+        send_error(sender, ERR_NEEDMOREPARAMS, "OPER :Not enough parameters");
         return -1;
     }
 

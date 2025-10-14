@@ -27,7 +27,6 @@ public:
 	
 	// Utility methods
 	bool hasPrefix() const { return !_prefix.empty(); }
-	// void hasTrailing(bool val) { _has_trailing = val; }
 	bool hasTrailing() const { return _has_trailing; }
 	size_t getParamCount() const { return _params.size(); }
 	

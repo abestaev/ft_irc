@@ -7,6 +7,8 @@
 
 class Client
 {
+private:
+	// bool _markedForDeath;
 public:
 	int fd;
 	struct pollfd *pfdp;
@@ -33,6 +35,7 @@ public:
 	bool nick_given;
 	bool user_given;
 	bool is_fully_registered;
+	bool marked_for_death;
 
 	Client();
 	Client(const Client& other);
@@ -43,6 +46,7 @@ public:
 	// Utility methods
 	void setNick(const std::string& new_nick);
 	void setUser(const std::string& username, const std::string& realname);
+
 	// bool isRegistered() const;
 	bool isReadyForRegistration() const;
 	std::string getUserModes() const;

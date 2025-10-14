@@ -17,8 +17,10 @@ Client::Client():
 	password_is_valid(false),
 	nick_given(false),
 	user_given(false),
-	is_fully_registered(false)
+	is_fully_registered(false),
+	marked_for_death(false)
 {
+	// _markedForDeath = false;
 	// Initialize sockaddr_in structure
 	memset(&addr, 0, sizeof(addr));
 }
@@ -51,6 +53,7 @@ Client::Client(const Client& other)
 	user_given = other.user_given;
 	is_fully_registered = other.is_fully_registered;
 	ongoing_negociation = other.ongoing_negociation;
+	marked_for_death = other.marked_for_death;
 }
 
 // Assignment operator
@@ -78,6 +81,7 @@ Client& Client::operator=(const Client& other)
 		nick_given = other.nick_given;
 		user_given = other.user_given;
 		is_fully_registered = other.is_fully_registered;
+		marked_for_death = other.marked_for_death;
 	}
 	return *this;
 }

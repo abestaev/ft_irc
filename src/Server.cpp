@@ -147,6 +147,10 @@ void Server::process_client_messages()
 	char buf[BUFFER_SIZE];
 
 	for (int i = 1; i < _nfds; i++)
+		if (_clients[i - 1].marked_for_death && _clients[i - 1].outbuf.empty())
+			handle_client_disconnect(i);
+
+	for (int i = 1; i < _nfds; i++)
 	{
 		if (_pfds[i].revents & POLLIN)
 		{

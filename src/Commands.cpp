@@ -34,8 +34,7 @@ void Commands::attempt_registration(Client& sender)
     {
         std::cout << "\033[31m[AUTH]\033[0m Connection refused (wrong password)" << std::endl;
         send_error(sender, 464, "Password incorrect");
-        // shutdown(sender.fd, SHUT_RD);
-        close(sender.fd); //TODO: mark fd for closure   instead of closing it right away (so that the error is actually sent) (valid for other closes) and close them all at next loop iteration (MAYBE)
+        sender.marked_for_death = true;
         return ;
     }
 
@@ -89,16 +88,18 @@ int Commands::execute_command(const Message& msg, Client& sender)
     //     }
     // }
 
+    //registration commands
+
+    //TODO: Clean errors not all over the place like it is right now
+
     if (command == "CAP") return cmd_cap(msg, sender);
-    if (command == "PASS") return cmd_pass(msg, sender);
-    if (command == "NICK") return cmd_nick(msg, sender);
-    if (command == "USER") return cmd_user(msg, sender);
-    if (command == "QUIT") return cmd_quit(msg, sender);
-    if (command == "PING") return cmd_ping(msg, sender);
-    if (command == "PONG") return cmd_pong(msg, sender);
-
-    if (!sender.is_fully_registered) return send_error(sender, 451, ":You are not registered"), -1;
-
+    else if (command == "PASS") return cmd_pass(msg, sender);
+    else if (command == "NICK") return cmd_nick(msg, sender);
+    else if (command == "USER") return cmd_user(msg, sender);
+    else if (command == "QUIT") return cmd_quit(msg, sender);
+    else if (command == "PING") return cmd_ping(msg, sender);
+    else if (command == "PONG") return cmd_pong(msg, sender);
+    //
     else if (command == "OPER") return cmd_oper(msg, sender);
     else if (command == "ERROR") return cmd_error(msg, sender);
     else if (command == "JOIN") return cmd_join(msg, sender);

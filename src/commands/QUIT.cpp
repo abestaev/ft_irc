@@ -35,6 +35,7 @@ int Commands::cmd_quit(const Message &msg, Client &sender)
 
     std::string response = "ERROR :Closing Link: " + reason + "\r\n";
     sendToClient(sender, response);
-    close(sender.fd);
+    // close(sender.fd);
+    sender.marked_for_death = true;
     return -1;
 }
