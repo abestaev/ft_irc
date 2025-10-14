@@ -80,7 +80,8 @@ int Commands::cmd_kick(const Message& msg, Client& sender)
         send_error(sender, 403, channel_name + " :No such channel");
         return -1;
     }
-    if (!ch->isOperator(sender))
+    // Server operators can kick anywhere, channel operators only in their channel
+    if (!sender.is_operator && !ch->isOperator(sender))
     {
         send_error(sender, 482, channel_name + " :You're not channel operator");
         return -1;

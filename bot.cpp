@@ -5,6 +5,7 @@
 #include <sstream>
 #include <cstring>
 #include <cstdlib>
+#include <ctime>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -19,16 +20,14 @@ private:
     std::set<std::string> _joined_channels;
     std::string _nick;
     std::string _password;
+    time_t _last_list_check;
     
     void send_raw(const std::string& msg) {
         std::string full = msg + "\r\n";
         send(_sockfd, full.c_str(), full.length(), 0);
-        std::cout << ">> " << msg << std::endl;
     }
     
     void process_line(const std::string& line) {
-        std::cout << "<< " << line << std::endl;
-        
         // PING/PONG
         if (line.find("PING") == 0) {
             send_raw("PONG " + line.substr(5));
@@ -37,7 +36,29 @@ private:
         
         // Check for OPER confirmation
         if (line.find("381") != std::string::npos || line.find("IRC operator") != std::string::npos) {
-            std::cout << "\033[32m[SUCCESS]\033[0m Bot is now an IRC operator!" << std::endl;
+            std::cout << "\033[32m[✓]\033[0m Bot is now an IRC operator" << std::endl;
+            // Request list of all channels to auto-join them
+            send_raw("LIST");
+        }
+        
+        // Check for error on KICK
+        if (line.find("482") != std::string::npos) {
+            std::cout << "\033[31m[✗]\033[0m Permission denied - OPER failed" << std::endl;
+        }
+        
+        // Parse LIST response (322 = channel list item)
+        if (line.find(" 322 ") != std::string::npos) {
+            // Format: :server 322 nick #channel users :topic
+            size_t chan_start = line.find("#");
+            if (chan_start != std::string::npos) {
+                std::string channel = line.substr(chan_start);
+                channel = channel.substr(0, channel.find(" "));
+                if (_joined_channels.find(channel) == _joined_channels.end()) {
+                    _joined_channels.insert(channel);
+                    send_raw("JOIN " + channel);
+                    std::cout << "\033[36m[→]\033[0m Joining existing channel " << channel << std::endl;
+                }
+            }
         }
         
         // JOIN notification - auto-join new channels
@@ -50,12 +71,12 @@ private:
                 
                 // Check if it's our own JOIN confirmation
                 if (line.find(":" + _nick + "!") == 0 || line.find(":" + _nick + " ") == 0) {
-                    std::cout << "\033[33m[JOIN]\033[0m Joined " << channel << " (server operator)" << std::endl;
+                    std::cout << "\033[36m[→]\033[0m Joined " << channel << std::endl;
                 }
                 // Auto-join if it's someone else creating a new channel
                 else if (_joined_channels.find(channel) == _joined_channels.end()) {
                     _joined_channels.insert(channel);
-                    std::cout << "\033[36m[AUTO-JOIN]\033[0m Joining new channel " << channel << std::endl;
+                    std::cout << "\033[36m[→]\033[0m Auto-joining " << channel << std::endl;
                     send_raw("JOIN " + channel);
                 }
             }
@@ -64,7 +85,16 @@ private:
         // PRIVMSG - check for ban words and commands
         if (line.find("PRIVMSG") != std::string::npos) {
             // Parse: :nick!user@host PRIVMSG #channel :message
+            // OR:    :nick PRIVMSG #channel :message
+            
+            if (line[0] != ':') return; // Must start with :
+            
             size_t nick_end = line.find('!');
+            if (nick_end == std::string::npos) {
+                // No !, try to find space (format: :nick PRIVMSG)
+                nick_end = line.find(' ');
+            }
+            
             size_t chan_start = line.find("#");
             size_t msg_start = line.find(" :", chan_start);
             
@@ -74,12 +104,16 @@ private:
                 channel = channel.substr(0, channel.find(" "));
                 std::string message = line.substr(msg_start + 2);
                 
+                // Clean message from \r\n
+                size_t end = message.find("\r");
+                if (end != std::string::npos) message = message.substr(0, end);
+                end = message.find("\n");
+                if (end != std::string::npos) message = message.substr(0, end);
+                
                 // Ignore our own messages
                 if (nick == _nick) {
                     return;
                 }
-                
-                std::cout << "[DEBUG] Nick: " << nick << " | Channel: " << channel << " | Message: " << message << std::endl;
                 
                 // Command: !addban <word>
                 if (message.find("!addban ") == 0) {
@@ -89,7 +123,7 @@ private:
                     word = word.substr(0, word.find("\n"));
                     _banwords.insert(word);
                     send_raw("PRIVMSG " + channel + " :Ban word added: " + word);
-                    std::cout << "[INFO] Added ban word: " << word << std::endl;
+                    std::cout << "\033[33m[+]\033[0m Ban word added: " << word << std::endl;
                     return;
                 }
                 
@@ -106,7 +140,7 @@ private:
                 // Check for ban words
                 for (std::set<std::string>::iterator it = _banwords.begin(); it != _banwords.end(); ++it) {
                     if (message.find(*it) != std::string::npos) {
-                        std::cout << "[KICK] Kicking " << nick << " from " << channel << " for: " << *it << std::endl;
+                        std::cout << "\033[31m[!]\033[0m Kicked " << nick << " from " << channel << " (reason: " << *it << ")" << std::endl;
                         send_raw("KICK " + channel + " " + nick + " :Ban word detected: " + *it);
                         return;
                     }
@@ -116,7 +150,7 @@ private:
     }
     
 public:
-    IRCBot(const std::string& nick) : _sockfd(-1), _nick(nick) {
+    IRCBot(const std::string& nick) : _sockfd(-1), _nick(nick), _last_list_check(0) {
         // Ban words par défaut
         _banwords.insert("badword");
         _banwords.insert("spam");
@@ -168,14 +202,21 @@ public:
         pfd.events = POLLIN;
         
         char buf[4096];
-        std::cout << "\033[32m=== Bot running ===\033[0m (Ctrl+C to stop)" << std::endl;
-        std::cout << "Current ban words: ";
+        std::cout << "\033[32m=== BotGuard Active ===\033[0m" << std::endl;
+        std::cout << "Ban words: ";
         for (std::set<std::string>::iterator it = _banwords.begin(); it != _banwords.end(); ++it) {
-            std::cout << "'" << *it << "' ";
+            std::cout << *it << " ";
         }
         std::cout << std::endl;
         
         while (true) {
+            // Check for new channels every 10 seconds
+            time_t now = time(NULL);
+            if (now - _last_list_check >= 2) {
+                send_raw("LIST");
+                _last_list_check = now;
+            }
+            
             int ret = poll(&pfd, 1, 100);
             if (ret > 0 && (pfd.revents & POLLIN)) {
                 int n = recv(_sockfd, buf, sizeof(buf) - 1, 0);
@@ -214,10 +255,6 @@ int main(int argc, char** argv) {
     if (!bot.connect("127.0.0.1", port, password)) {
         return 1;
     }
-    
-    // Auto-join default channel
-    sleep(1);
-    bot.join_channel("#general");
     
     bot.run();
     return 0;

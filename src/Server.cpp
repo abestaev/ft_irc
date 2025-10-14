@@ -373,21 +373,24 @@ Message Server::parse_irc_message(const std::string& raw_message)
 
 void Server::handle_command(const Message& msg, Client& sender)
 {
-	// Log the command received
-	std::string sender_nick = sender.nick.empty() ? "unregistered" : sender.nick;
-	std::cout << "\033[35m[CMD]\033[0m " << sender_nick << " -> " << msg.getCommand();
-	
-	// Add parameters if any
-	if (!msg.getParams().empty()) {
-		std::cout << " " << msg.getParams()[0];
+	// Log the command received (ignore LIST and PING/PONG for cleaner logs)
+	const std::string& cmd = msg.getCommand();
+	if (cmd != "LIST" && cmd != "PING" && cmd != "PONG") {
+		std::string sender_nick = sender.nick.empty() ? "unregistered" : sender.nick;
+		std::cout << "\033[35m[CMD]\033[0m " << sender_nick << " -> " << msg.getCommand();
+		
+		// Add parameters if any
+		if (!msg.getParams().empty()) {
+			std::cout << " " << msg.getParams()[0];
+		}
+		
+		// Add trailing if any
+		if (msg.hasTrailing()) {
+			std::cout << " :" << msg.getTrailing();
+		}
+		
+		std::cout << std::endl;
 	}
-	
-	// Add trailing if any
-	if (msg.hasTrailing()) {
-		std::cout << " :" << msg.getTrailing();
-	}
-	
-	std::cout << std::endl;
 	
 	_commands->execute_command(msg, sender);
 }

@@ -24,14 +24,19 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 
 all: $(NAME)
 
+ircbot: bot.cpp
+	$(CPPC) $(CPPFLAGS) bot.cpp -o ircbot
+
+bot: ircbot
+
 clean:
 	@echo removing $(OBJS)
 	@$(RM) $(OBJS) $(OBJDIR)
 
 fclean: clean
-	@echo removing $(NAME)
-	@$(RM) $(NAME)
+	@echo removing $(NAME) ircbot
+	@$(RM) $(NAME) ircbot
 
 re: fclean all
 
-.PHONY: all clean fclean re
+.PHONY: all bot clean fclean re
