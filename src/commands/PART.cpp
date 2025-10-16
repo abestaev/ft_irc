@@ -19,7 +19,7 @@ int Commands::cmd_part(const Message& msg, Client& sender)
         }
         channels.push_back(current);
     }
-    std::string reason = msg.getTrailing();
+    std::string reason = msg.getParamCount() >= 2 ? msg.getParams()[1] : "";
     int success_count = 0;
     for (size_t idx = 0; idx < channels.size(); ++idx) {
         std::string channel_name = channels[idx];

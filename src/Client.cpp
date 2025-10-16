@@ -13,11 +13,14 @@ Client::Client():
 	is_restricted(false),
 	is_global_operator(false),
 	is_local_operator(false),
+	ongoing_negociation(false),
 	password_is_valid(false),
 	nick_given(false),
 	user_given(false),
-	is_fully_registered(false)
+	is_fully_registered(false),
+	marked_for_death(false)
 {
+	// _markedForDeath = false;
 	// Initialize sockaddr_in structure
 	memset(&addr, 0, sizeof(addr));
 }
@@ -49,6 +52,8 @@ Client::Client(const Client& other)
 	nick_given = other.nick_given;
 	user_given = other.user_given;
 	is_fully_registered = other.is_fully_registered;
+	ongoing_negociation = other.ongoing_negociation;
+	marked_for_death = other.marked_for_death;
 }
 
 // Assignment operator
@@ -76,6 +81,7 @@ Client& Client::operator=(const Client& other)
 		nick_given = other.nick_given;
 		user_given = other.user_given;
 		is_fully_registered = other.is_fully_registered;
+		marked_for_death = other.marked_for_death;
 	}
 	return *this;
 }
@@ -94,9 +100,14 @@ void Client::setUser(const std::string& new_username, const std::string& new_rea
 	user_given = true;
 }
 
-bool Client::isRegistered() const
+// bool Client::isRegistered() const
+// {
+// 	return password_is_valid && nick_given && user_given;
+// }
+
+bool Client::isReadyForRegistration() const
 {
-	return password_is_valid && nick_given && user_given;
+	return nick_given && user_given && !ongoing_negociation;
 }
 
 std::string Client::getUserModes() const

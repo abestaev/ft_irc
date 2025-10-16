@@ -6,7 +6,7 @@
 int Commands::cmd_oper(const Message& msg, Client& sender)
 {
     if (msg.getParamCount() < 2) {
-        send_error(sender, 461, "OPER :Not enough parameters");
+        send_error(sender, ERR_NEEDMOREPARAMS, "OPER :Not enough parameters");
         return -1;
     }
 
@@ -15,7 +15,7 @@ int Commands::cmd_oper(const Message& msg, Client& sender)
 
     if (username == "admin" && password == "admin123") {
         sender.is_operator = true;
-        send_reply(sender, 381, ":You are now an IRC operator");
+        send_reply(sender, RPL_YOUREOPER, ":You are now an IRC operator");
 
         std::string prefix = sender.nick;
         if (!sender.username.empty() && !sender.hostname.empty())
@@ -31,7 +31,7 @@ int Commands::cmd_oper(const Message& msg, Client& sender)
         return 0;
     }
 
-    send_error(sender, 464, ":Password incorrect");
+    send_error(sender, ERR_PASSWDMISMATCH, ":Password incorrect");
     return -1;
 }
 

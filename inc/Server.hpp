@@ -9,6 +9,7 @@
 #include "Commands.hpp"
 #include "Channel.hpp"
 #include <vector>
+#include "irc_numerics.hpp"
 
 #include "config.hpp"
 

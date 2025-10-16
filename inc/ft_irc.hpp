@@ -27,6 +27,8 @@
 #include "Channel.hpp"
 #include "Commands.hpp"
 
+#include "irc_numerics.hpp"
+
 #include "config.hpp"
 
 // Global functions

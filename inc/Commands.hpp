@@ -4,6 +4,7 @@
 #include <string>
 #include "Client.hpp"
 #include "Message.hpp"
+#include "irc_numerics.hpp"
 
 class Server;
 
@@ -11,7 +12,8 @@ class Commands
 {
 private:
 	Server* _server;
-    void maybe_complete_registration(Client& sender);
+    // void maybe_complete_registration(Client& sender);
+	void attempt_registration(Client& sender);
 
 public:
 	Commands(Server* server);
