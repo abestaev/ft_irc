@@ -6,6 +6,10 @@
 
 int Commands::cmd_mode(const Message &msg, Client &sender)
 {
+    if (!sender.is_fully_registered) {
+        send_error(sender, 451, ":You have not registered");
+        return -1;
+    }
     if (msg.getParamCount() < 1)
     {
         send_error(sender, 461, "MODE :Not enough parameters");

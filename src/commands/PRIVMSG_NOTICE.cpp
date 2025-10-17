@@ -4,6 +4,10 @@
 
 int Commands::cmd_privmsg(const Message &msg, Client &sender)
 {
+    if (!sender.is_fully_registered) {
+        send_error(sender, 451, ":You have not registered");
+        return -1;
+    }
     if (msg.getParamCount() < 1)
         return send_error(sender, ERR_NORECIPIENT, "No recipient given (PRIVMSG)"), -1;
     if (msg.getParamCount() < 2)
@@ -41,6 +45,10 @@ int Commands::cmd_privmsg(const Message &msg, Client &sender)
 
 int Commands::cmd_notice(const Message &msg, Client &sender)
 {
+    if (!sender.is_fully_registered) {
+        send_error(sender, 451, ":You have not registered");
+        return -1;
+    }
     if (msg.getParamCount() < 1)
     {
         return -1;

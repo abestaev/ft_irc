@@ -80,14 +80,6 @@ const std::string& Commands::getServerCreatedAt() const { return _server->getCre
 int Commands::execute_command(const Message& msg, Client& sender)
 {
     const std::string& command = msg.getCommand();
-    // if (!sender.is_fully_registered) {
-    //     if (command != "PASS" && command != "NICK" && command != "USER" &&
-    //         command != "CAP" && command != "QUIT" && command != "PING") {
-    //         send_error(sender, 451, ":You have not registered");
-    //         return -1;
-    //     }
-    // }
-
     //registration commands
 
     //TODO: Clean errors not all over the place like it is right now

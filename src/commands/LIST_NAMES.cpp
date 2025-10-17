@@ -5,6 +5,10 @@
 
 int Commands::cmd_list(const Message &msg, Client &sender)
 {
+    if (!sender.is_fully_registered) {
+        send_error(sender, 451, ":You have not registered");
+        return -1;
+    }
     (void)msg;
     std::string line = ":ircserv 321 " + (sender.nick.empty() ? std::string("*") : sender.nick) + " Channel :Users Name\r\n";
     sendToClient(sender, line);
@@ -22,6 +26,10 @@ int Commands::cmd_list(const Message &msg, Client &sender)
 
 int Commands::cmd_names(const Message &msg, Client &sender)
 {
+    if (!sender.is_fully_registered) {
+        send_error(sender, 451, ":You have not registered");
+        return -1;
+    }
     std::string channel_name;
     if (msg.getParamCount() >= 1)
         channel_name = msg.getParams()[0];
