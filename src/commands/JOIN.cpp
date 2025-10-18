@@ -5,6 +5,10 @@
 
 int Commands::cmd_join(const Message &msg, Client &sender)
 {
+    if (!sender.is_fully_registered) {
+        send_error(sender, 451, ":You have not registered");
+        return -1;
+    }
     if (msg.getParamCount() < 1)
     {
         std::cout << "\033[31m[ERROR]\033[0m Invalid parameters for JOIN: not enough parameters" << std::endl;

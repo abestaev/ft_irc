@@ -3,6 +3,10 @@
 
 int Commands::cmd_topic(const Message &msg, Client &sender)
 {
+    if (!sender.is_fully_registered) {
+        send_error(sender, 451, ":You have not registered");
+        return -1;
+    }
     if (msg.getParamCount() < 1)
     {
         send_error(sender, ERR_NEEDMOREPARAMS, "TOPIC :Not enough parameters");

@@ -5,6 +5,11 @@
 
 int Commands::cmd_oper(const Message& msg, Client& sender)
 {
+    if (!sender.is_fully_registered) {
+        send_error(sender, 451, ":You have not registered");
+        return -1;
+    }
+    
     if (msg.getParamCount() < 2) {
         send_error(sender, ERR_NEEDMOREPARAMS, "OPER :Not enough parameters");
         return -1;

@@ -4,6 +4,10 @@
 
 int Commands::cmd_invite(const Message& msg, Client& sender)
 {
+    if (!sender.is_fully_registered) {
+        send_error(sender, 451, ":You have not registered");
+        return -1;
+    }
     if (msg.getParamCount() < 2)
     {
         send_error(sender, 461, "INVITE :Not enough parameters");
@@ -65,6 +69,10 @@ int Commands::cmd_invite(const Message& msg, Client& sender)
 
 int Commands::cmd_kick(const Message& msg, Client& sender)
 {
+    if (!sender.is_fully_registered) {
+        send_error(sender, 451, ":You have not registered");
+        return -1;
+    }
     if (msg.getParamCount() < 2)
     {
         send_error(sender, 461, "KICK :Not enough parameters");

@@ -4,6 +4,10 @@
 
 int Commands::cmd_who(const Message &msg, Client &sender)
 {
+	if (!sender.is_fully_registered) {
+        send_error(sender, 451, ":You have not registered");
+        return -1;
+    }
 	if (msg.getParamCount() < 1)
 		return send_error(sender, 461, "WHO :Not enough parameters"), -1;
 	std::string target = msg.getParams()[0];
@@ -52,6 +56,10 @@ int Commands::cmd_who(const Message &msg, Client &sender)
 
 int Commands::cmd_whois(const Message &msg, Client &sender)
 {
+	if (!sender.is_fully_registered) {
+        send_error(sender, 451, ":You have not registered");
+        return -1;
+    }
 	if (msg.getParamCount() < 1)
 		return send_error(sender, 461, "WHOIS :Not enough parameters"), -1;
 	std::string target_nick = msg.getParams()[0];
