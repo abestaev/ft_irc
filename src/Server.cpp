@@ -288,8 +288,8 @@ void Server::handle_client_disconnect(int client_index)
 	std::cout << "\033[33m[DISCONNECT]\033[0m Client " << (client.is_fully_registered ? client.nick : "unregistered")
 			<< " (fd:" << _pfds[client_index].fd << ") disconnected" << std::endl;
 
-	std::vector<Channel>::iterator it;
-	for (it = _channels.begin(); it != _channels.end(); it++)
+	std::vector<Channel>::iterator it = _channels.begin();
+	while (it != _channels.end())
 	{
 		if (it->has_client(client))
 		{
@@ -297,8 +297,16 @@ void Server::handle_client_disconnect(int client_index)
 			if (it->get_user_count() == 0)
 			{
 				std::cout << "\033[33m[CHANNEL]\033[0m Deleted channel " << it->getName() << std::endl;
-				it = _channels.erase(it);
+				it = _channels.erase(it);  // erase returns next iterator
 			}
+			else
+			{
+				++it;  // Only increment if we didn't erase
+			}
+		}
+		else
+		{
+			++it;  // Channel doesn't have this client, move to next
 		}
 	}
 
