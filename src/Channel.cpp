@@ -9,10 +9,7 @@ Channel::Channel(const std::string& name):
     _user_limit(0), 
     _invite_only(false), 
     _topic_restricted(false), 
-    _moderated(false),
-    _secret(false),
-    _no_external_messages(false),
-    _channel_operator_topic(false)
+    _moderated(false)
 {
 	// Initialize client arrays
 	for (int i = 0; i < MAX_CLIENTS; i++)

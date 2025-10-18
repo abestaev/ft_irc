@@ -32,12 +32,6 @@ int Commands::cmd_mode(const Message &msg, Client &sender)
                 modes += "k";
             if (ch->getUserLimit() > 0)
                 modes += "l";
-            if (ch->isSecret())
-                modes += "s";
-            if (ch->isNoExternalMessages())
-                modes += "n";
-            if (ch->isChannelOperatorTopic())
-                modes += "T";
             std::string reply = target + " " + modes;
             if (ch->hasKey())
                 reply += " *";
@@ -85,24 +79,6 @@ int Commands::cmd_mode(const Message &msg, Client &sender)
             {
                 ch->setTopicRestricted(adding);
                 appliedSpec += 't';
-                continue;
-            }
-            if (m == 's')
-            {
-                ch->setSecret(adding);
-                appliedSpec += 's';
-                continue;
-            }
-            if (m == 'n')
-            {
-                ch->setNoExternalMessages(adding);
-                appliedSpec += 'n';
-                continue;
-            }
-            if (m == 'T')
-            {
-                ch->setChannelOperatorTopic(adding);
-                appliedSpec += 'T';
                 continue;
             }
             if (m == 'k')
